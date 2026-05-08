@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="animate-fade-in">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <h2>System Administration</h2>
+        <div style="display: flex; gap: 1rem;">
+            <button onclick="syncFirebase('push')" class="btn btn-primary">Backup to Cloud</button>
+            <button onclick="syncFirebase('pull')" class="btn" style="border: 1px solid var(--accent); color: var(--accent);">Restore from Cloud</button>
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        <!-- Fraud Alerts (View Requirement) -->
+        <div class="glass card">
+            <h3>Recent Fraud Alerts</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Severity</th>
+                        <th>Account</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for alert in alerts %}
+                    <tr>
+                        <td style="text-transform: capitalize;">{{ alert[1].replace('_', ' ') }}</td>
+                        <td>
+                            <span class="status-badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">
+                                {{ alert[2] }}
+                            </span>
+                        </td>
+                        <td>{{ alert[4] }}</td>
+                        <td>{{ alert[3].strftime('%H:%M %d/%m/%y') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- System Maintenance -->
+        <div class="glass card">
+            <h3>Maintenance Tasks</h3>
+            <div style="margin-bottom: 2rem;">
+                <p style="font-size: 0.9rem; color: var(--text-muted);">Post monthly interest to all active savings accounts using SQL stored procedure.</p>
+                <form action="{{ url_for('admin.post_interest') }}" method="POST">
+                    <button type="submit" class="btn" style="width: 100%; border: 1px solid var(--primary); color: var(--primary);">Post Monthly Interest</button>
+                </form>
+            </div>
+            
+            <div>
+                <h4>Database Health</h4>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Sync Status</span>
+                    <span id="sync-status" style="color: var(--accent);">Synchronized</span>
+                </div>
+                <div style="background: rgba(255,255,255,0.1); height: 4px; border-radius: 2px;">
+                    <div style="background: var(--accent); width: 100%; height: 100%; border-radius: 2px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Accounts Overview -->
+    <div class="glass card" style="margin-top: 2rem;">
+        <h3>System-Wide Active Accounts</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Customer</th>
+                    <th>Account #</th>
+                    <th>Type</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for acc in active_accounts %}
+                <tr>
+                    <td>{{ acc[1] }}</td>
+                    <td>{{ acc[2] }}</td>
+                    <td style="text-transform: capitalize;">{{ acc[3] }}</td>
+                    <td style="font-weight: 600;">${{ acc[4] }}</td>
+                    <td><span class="status-badge status-{{ acc[5] }}">{{ acc[5] }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function syncFirebase(action) {
+    const url = action === 'push' ? '/admin/backup/push' : '/admin/backup/pull';
+    document.getElementById('sync-status').innerText = 'Syncing...';
+    
+    fetch(url, { method: 'POST' })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alert('Cloud synchronization complete!');
+            document.getElementById('sync-status').innerText = 'Synchronized';
+        } else {
+            alert('Error: ' + data.message);
+            document.getElementById('sync-status').innerText = 'Sync Failed';
+        }
+    })
+    .catch(err => {
+        alert('Sync error occurred');
+        document.getElementById('sync-status').innerText = 'Error';
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,16 @@
+# Firebase Credentials
+firebase-credentials.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Database
+*.sqlite3
+
+# Flask
+instance/
+.webassets-cache
