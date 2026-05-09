@@ -205,10 +205,10 @@
                 {% for acc in active_accounts %}
                 <tr>
                     <td>
-                        <img src="{{ url_for('static', filename=acc[9]) if acc[9] else '' }}" 
+                        <img src="{{ url_for('static', filename=acc[9]) if acc[9] else url_for('static', filename='profile_pics/default.png') }}" 
                              alt="Profile" 
                              style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid var(--glass-border);"
-                             onerror="this.style.display='none'">
+                             onerror="this.src='{{ url_for('static', filename='profile_pics/default.png') }}'">
                     </td>
                     <td>{{ acc[1] }}</td>
                     <td>
