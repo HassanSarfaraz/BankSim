@@ -24,10 +24,10 @@ def fix():
         print("Standardizing account numbers...")
         cur.execute("UPDATE accounts SET account_number = REPLACE(account_number, 'PK-BANK', 'PK99-BANK')")
         
-        # 3. Set test profile images (ONLY for admin user 1, not everyone)
+        # 3. Set test profile images for default users
         print("Setting test profile images...")
-        img = 'profile_pics/PK99-BANK-0001.jpg'
-        cur.execute("UPDATE users SET profile_image = %s WHERE user_id = 1", (img,))
+        cur.execute("UPDATE users SET profile_image = 'profile_pics/default.png' WHERE user_id = 1")
+        cur.execute("UPDATE users SET profile_image = 'profile_pics/2.jpg' WHERE user_id = 2")
         
         conn.commit()
         
