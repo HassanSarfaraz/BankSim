@@ -2,7 +2,7 @@ from ..firebase.firestore import db_firestore
 from ..models.db import get_db_conn
 import psycopg2.extras
 
-SYNC_TABLES = ['customers', 'accounts', 'transactions', 'loans']
+SYNC_TABLES = ['users', 'customers', 'accounts', 'transactions', 'loans']
 
 def postgres_to_firebase():
     """Backup: Postgres -> Firestore"""
@@ -68,16 +68,35 @@ def firebase_to_postgres():
             if not filtered_data:
                 continue
                 
-            columns = filtered_data.keys()
-            placeholders = [f"%({col})s" for col in columns]
+            TABLE_PKS = {
+                'users': 'user_id',
+                'customers': 'customer_id',
+                'accounts': 'account_id',
+                'transactions': 'transaction_id',
+                'loans': 'loan_id'
+            }
+            pk_col = TABLE_PKS.get(table)
             
-            # Upsert logic - Wrap columns in quotes to handle reserved words
-            sql = f"""
-                INSERT INTO {table} ({', '.join([f'"{col}"' for col in columns])})
-                VALUES ({', '.join(placeholders)})
-                ON CONFLICT DO NOTHING
-            """
-            cur.execute(sql, filtered_data)
+            # Check if record exists locally
+            cur.execute(f'SELECT 1 FROM {table} WHERE "{pk_col}" = %s', (filtered_data.get(pk_col),))
+            exists = cur.fetchone()
+            
+            columns = list(filtered_data.keys())
+            
+            if exists:
+                # UPDATE existing record to prioritize cloud data
+                set_clause = ', '.join([f'"{col}" = %({col})s' for col in columns if col != pk_col])
+                if set_clause:
+                    sql = f'UPDATE {table} SET {set_clause} WHERE "{pk_col}" = %({pk_col})s'
+                    cur.execute(sql, filtered_data)
+            else:
+                # INSERT new record
+                placeholders = [f"%({col})s" for col in columns]
+                sql = f"""
+                    INSERT INTO {table} ({', '.join([f'"{col}"' for col in columns])})
+                    VALUES ({', '.join(placeholders)})
+                """
+                cur.execute(sql, filtered_data)
             count += 1
         
         conn.commit()
