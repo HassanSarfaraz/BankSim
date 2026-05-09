@@ -43,17 +43,16 @@ def dashboard():
     """, (session['user_id'],))
     transactions = cur.fetchall()
 
-    cur.execute("""
-        SELECT attempt_time 
-        FROM login_attempts 
-        WHERE user_id = %s AND success = TRUE 
-        ORDER BY attempt_time DESC 
-        OFFSET 1 LIMIT 1
-    """, (session['user_id'],))
-    last_login_res = cur.fetchone()
-    last_login = last_login_res[0] if last_login_res else None
+    cur.execute("SELECT previous_login, profile_image FROM users WHERE user_id = %s", (session['user_id'],))
+    user_res = cur.fetchone()
+    last_login = user_res[0] if user_res else None
+    profile_image = user_res[1] if user_res else None
 
-    return render_template('dashboard/customer.html', accounts=accounts, transactions=transactions, last_login=last_login)
+    return render_template('dashboard/customer.html', 
+                         accounts=accounts, 
+                         transactions=transactions, 
+                         last_login=last_login,
+                         profile_image=profile_image)
 
 
 @customer_bp.route('/transfer', methods=['POST'])
