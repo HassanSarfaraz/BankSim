@@ -33,19 +33,16 @@ BEGIN
     WHERE account_id = p_from_account FOR UPDATE;
 
     IF v_balance < p_amount THEN
-        RAISE EXCEPTION 'Insufficient funds: balance is %', v_balance;
+        RAISE EXCEPTION 'Insufficient funds: balance is %, need %', v_balance, p_amount;
     END IF;
 
-    -- Debit
+    -- Debit sender (intercept trigger sets status=pending if amount >= 10000)
     INSERT INTO transactions(account_id, transaction_type, amount, description, transaction_date)
     VALUES (p_from_account, 'withdrawal', p_amount, p_description, NOW());
 
-    -- Credit
+    -- Credit receiver (also held pending if large)
     INSERT INTO transactions(account_id, transaction_type, amount, description, transaction_date)
     VALUES (p_to_account, 'deposit', p_amount, p_description, NOW());
-
-    -- Note: Procedures in PL/pgSQL can't have COMMIT if called within an atomic context, 
-    -- but here we assume it's the top-level call or handled by Flask.
 END;
 $$;
 

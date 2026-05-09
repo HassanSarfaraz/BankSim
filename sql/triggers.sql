@@ -38,10 +38,10 @@ CREATE OR REPLACE FUNCTION update_balance_after_txn()
 RETURNS TRIGGER AS $$
 BEGIN
     IF NEW.status = 'completed' THEN
-        IF NEW.transaction_type IN ('deposit','transfer_in') THEN
+        IF NEW.transaction_type = 'deposit' THEN
             UPDATE accounts SET balance = balance + NEW.amount
             WHERE account_id = NEW.account_id;
-        ELSE
+        ELSIF NEW.transaction_type IN ('withdrawal', 'transfer', 'payment', 'fee') THEN
             UPDATE accounts SET balance = balance - NEW.amount
             WHERE account_id = NEW.account_id;
         END IF;
@@ -59,10 +59,10 @@ CREATE OR REPLACE FUNCTION update_balance_after_txn_update()
 RETURNS TRIGGER AS $$
 BEGIN
     IF OLD.status = 'pending' AND NEW.status = 'completed' THEN
-        IF NEW.transaction_type IN ('deposit','transfer_in') THEN
+        IF NEW.transaction_type = 'deposit' THEN
             UPDATE accounts SET balance = balance + NEW.amount
             WHERE account_id = NEW.account_id;
-        ELSE
+        ELSIF NEW.transaction_type IN ('withdrawal', 'transfer', 'payment', 'fee') THEN
             UPDATE accounts SET balance = balance - NEW.amount
             WHERE account_id = NEW.account_id;
         END IF;
