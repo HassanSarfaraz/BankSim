@@ -128,3 +128,12 @@ CREATE TABLE media_storage (
     firebase_path VARCHAR(500),
     uploaded_at TIMESTAMP DEFAULT NOW()
 );
+
+-- 11. DEPOSIT REQUESTS
+CREATE TABLE deposit_requests (
+    request_id BIGSERIAL PRIMARY KEY,
+    account_id BIGINT REFERENCES accounts(account_id),
+    amount DECIMAL(15,2) NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT NOW()
+);
