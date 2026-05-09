@@ -239,3 +239,55 @@ def upload_profile_pic():
         flash(f"Error: {str(e)}", "danger")
 
     return redirect(url_for('customer.dashboard'))
+
+
+@customer_bp.route('/open_account', methods=['POST'])
+def open_account():
+    if _check_login():
+        return redirect(url_for('auth.login'))
+
+    account_type = request.form.get('account_type', 'checking').strip().lower()
+    if account_type not in ('checking', 'savings', 'business'):
+        flash("Invalid account type selected.", "warning")
+        return redirect(url_for('customer.dashboard'))
+
+    conn = get_db_conn()
+    cur = conn.cursor()
+    try:
+        # Get customer_id
+        cur.execute("SELECT customer_id FROM customers WHERE user_id = %s", (session['user_id'],))
+        c_res = cur.fetchone()
+        if not c_res:
+            flash("Customer profile not found.", "danger")
+            return redirect(url_for('customer.dashboard'))
+            
+        customer_id = c_res[0]
+        
+        # Generate random account number
+        import random
+        acc_num = f"PK-BANK-{random.randint(10000, 99999)}"
+        
+        # Insert new account
+        cur.execute(
+            "INSERT INTO accounts (account_number, customer_id, account_type, balance, status) VALUES (%s, %s, %s, 0.00, 'active') RETURNING account_id",
+            (acc_num, customer_id, account_type)
+        )
+        account_id = cur.fetchone()[0]
+        conn.commit()
+        
+        # Sync to Firebase
+        push_record('accounts', account_id, {
+            'account_id': account_id,
+            'account_number': acc_num,
+            'customer_id': customer_id,
+            'account_type': account_type,
+            'balance': 0.00,
+            'status': 'active'
+        })
+        
+        flash(f"New {account_type.capitalize()} account opened successfully! Account #{acc_num}", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error opening account: {str(e)}", "danger")
+
+    return redirect(url_for('customer.dashboard'))

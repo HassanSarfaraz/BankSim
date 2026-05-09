@@ -94,6 +94,23 @@
             </form>
         </div>
 
+        <!-- Open Additional Account -->
+        <div class="glass card" style="margin-top: 2rem;">
+            <h3>Open Additional Account</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">Instantly open a new account under your profile.</p>
+            <form action="{{ url_for('customer.open_account') }}" method="POST">
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.8rem; color: var(--text-muted);">Account Type</label>
+                    <select name="account_type" class="glass" style="width: 100%; padding: 0.5rem; color: white;">
+                        <option value="checking">Checking</option>
+                        <option value="savings">Savings</option>
+                        <option value="business">Business</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn" style="width: 100%; border: 1px solid var(--primary); color: var(--primary);">Open Account</button>
+            </form>
+        </div>
+
         <!-- Request Deposit -->
         <div class="glass card" style="margin-top: 2rem;">
             <h3>Request Cash Deposit</h3>
