@@ -65,7 +65,7 @@ def dashboard():
     """)
     deposit_requests = cur.fetchall()
 
-    # ── Pending Account Requests ────────────────────────────────────────────────
+    # ── Pending Account Requests (New Users) ────────────────────────────────────
     cur.execute("""
         SELECT request_id, username, email, first_name, last_name, created_at
         FROM account_requests
@@ -74,6 +74,17 @@ def dashboard():
     """)
     account_requests = cur.fetchall()
 
+    # ── Pending Additional Accounts (Existing Users) ────────────────────────────
+    cur.execute("""
+        SELECT a.account_id, a.account_number, a.account_type, a.opened_date,
+               c.first_name || ' ' || c.last_name AS customer_name
+        FROM accounts a
+        JOIN customers c ON a.customer_id = c.customer_id
+        WHERE a.status = 'pending'
+        ORDER BY a.opened_date DESC
+    """)
+    pending_sub_accounts = cur.fetchall()
+
     return render_template(
         'dashboard/admin.html',
         alerts=alerts,
@@ -81,6 +92,7 @@ def dashboard():
         global_transactions=global_transactions,
         deposit_requests=deposit_requests,
         account_requests=account_requests,
+        pending_sub_accounts=pending_sub_accounts,
         txn_limit=txn_limit
     )
 
@@ -325,6 +337,27 @@ def post_interest():
         cur.execute("CALL post_monthly_interest()")
         conn.commit()
         flash("Monthly interest posted to all savings accounts.", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error: {str(e)}", "danger")
+    return redirect(url_for('admin.dashboard'))
+@admin_bp.route('/handle_pending_account/<int:account_id>/<action>', methods=['POST'])
+def handle_pending_account(account_id, action):
+    if _require_admin():
+        return redirect(url_for('auth.login'))
+    conn = get_db_conn()
+    cur = conn.cursor()
+    try:
+        if action == 'accept':
+            cur.execute("UPDATE accounts SET status = 'active' WHERE account_id = %s", (account_id,))
+            conn.commit()
+            push_record('accounts', account_id, {'account_id': account_id, 'status': 'active'})
+            flash("Additional account approved and activated.", "success")
+        elif action == 'reject':
+            cur.execute("DELETE FROM accounts WHERE account_id = %s AND status = 'pending'", (account_id,))
+            conn.commit()
+            push_record('accounts', account_id, {'account_id': account_id, 'status': 'rejected'}) # Optional sync deletion
+            flash("Additional account request rejected.", "info")
     except Exception as e:
         conn.rollback()
         flash(f"Error: {str(e)}", "danger")

@@ -13,14 +13,14 @@ SELECT
     u.user_id,
     u.last_login,
     u.profile_image,
-    u.previous_login
+    (SELECT attempt_time FROM login_attempts WHERE user_id = u.user_id AND success = TRUE ORDER BY attempt_time DESC OFFSET 1 LIMIT 1) AS previous_login
 FROM users u
 JOIN customers c ON u.user_id = c.user_id
 JOIN accounts a ON c.customer_id = a.customer_id
 WHERE a.status = 'active';
 
 -- Overdue loans
-CREATE VIEW overdue_loans_view AS
+CREATE OR REPLACE VIEW overdue_loans_view AS
 SELECT 
     l.loan_id,
     c.first_name || ' ' || c.last_name AS customer_name,

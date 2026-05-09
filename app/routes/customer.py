@@ -43,7 +43,13 @@ def dashboard():
     """, (session['user_id'],))
     transactions = cur.fetchall()
 
-    cur.execute("SELECT previous_login FROM users WHERE user_id = %s", (session['user_id'],))
+    cur.execute("""
+        SELECT attempt_time 
+        FROM login_attempts 
+        WHERE user_id = %s AND success = TRUE 
+        ORDER BY attempt_time DESC 
+        OFFSET 1 LIMIT 1
+    """, (session['user_id'],))
     last_login_res = cur.fetchone()
     last_login = last_login_res[0] if last_login_res else None
 
@@ -205,15 +211,7 @@ def upload_profile_pic():
     conn = get_db_conn()
     cur = conn.cursor()
     try:
-        # Get account number or fallback to username
-        cur.execute("SELECT c.customer_id FROM customers c WHERE c.user_id = %s", (session['user_id'],))
-        c_res = cur.fetchone()
-        identifier = session.get('username')
-        if c_res:
-            cur.execute("SELECT account_number FROM accounts WHERE customer_id = %s ORDER BY account_id LIMIT 1", (c_res[0],))
-            a_res = cur.fetchone()
-            if a_res:
-                identifier = a_res[0]
+        identifier = str(session['user_id'])
                 
         # Save file locally
         ext = file.filename.split('.')[-1]
@@ -267,9 +265,9 @@ def open_account():
         import random
         acc_num = f"PK-BANK-{random.randint(10000, 99999)}"
         
-        # Insert new account
+        # Insert new account with pending status
         cur.execute(
-            "INSERT INTO accounts (account_number, customer_id, account_type, balance, status) VALUES (%s, %s, %s, 0.00, 'active') RETURNING account_id",
+            "INSERT INTO accounts (account_number, customer_id, account_type, balance, status) VALUES (%s, %s, %s, 0.00, 'pending') RETURNING account_id",
             (acc_num, customer_id, account_type)
         )
         account_id = cur.fetchone()[0]
@@ -282,10 +280,10 @@ def open_account():
             'customer_id': customer_id,
             'account_type': account_type,
             'balance': 0.00,
-            'status': 'active'
+            'status': 'pending'
         })
         
-        flash(f"New {account_type.capitalize()} account opened successfully! Account #{acc_num}", "success")
+        flash(f"New {account_type.capitalize()} account requested successfully! Admin approval pending.", "success")
     except Exception as e:
         conn.rollback()
         flash(f"Error opening account: {str(e)}", "danger")
