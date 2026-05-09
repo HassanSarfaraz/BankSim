@@ -44,7 +44,7 @@ def dashboard():
     limit_clause = f"LIMIT {txn_limit}" if txn_limit > 0 else ""
     cur.execute(f"""
         SELECT t.transaction_id, t.transaction_type, t.amount, t.transaction_date,
-               t.description, a.account_number, t.status
+               t.description, a.account_number, t.status, t.balance_after
         FROM transactions t
         JOIN accounts a ON t.account_id = a.account_id
         WHERE t.status = 'completed'
@@ -52,6 +52,10 @@ def dashboard():
         {limit_clause}
     """)
     global_transactions = cur.fetchall()
+
+    # ── System Audit Logs ───────────────────────────────────────────────────────
+    cur.execute("SELECT * FROM recent_audit_view")
+    audit_logs = cur.fetchall()
 
     # ── Pending Deposit Requests ────────────────────────────────────────────────
     cur.execute("""
@@ -93,6 +97,7 @@ def dashboard():
         deposit_requests=deposit_requests,
         account_requests=account_requests,
         pending_sub_accounts=pending_sub_accounts,
+        audit_logs=audit_logs,
         txn_limit=txn_limit
     )
 

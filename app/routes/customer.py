@@ -23,7 +23,7 @@ def dashboard():
 
     cur.execute("""
         SELECT c.first_name, c.last_name, a.account_id, a.account_number,
-               a.account_type, a.balance, a.status
+               a.account_type, a.balance, a.status, a.interest_rate, a.overdraft_limit
         FROM customers c
         JOIN accounts a ON c.customer_id = a.customer_id
         WHERE c.user_id = %s
@@ -33,7 +33,7 @@ def dashboard():
 
     cur.execute("""
         SELECT t.transaction_id, t.transaction_type, t.amount,
-               t.transaction_date, t.description, t.status
+               t.transaction_date, t.description, t.status, t.balance_after
         FROM transactions t
         JOIN accounts a ON t.account_id = a.account_id
         JOIN customers c ON a.customer_id = c.customer_id

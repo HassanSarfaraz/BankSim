@@ -1,6 +1,6 @@
 -- views.sql
 
--- Active customer accounts overview
+-- Active customer accounts overview (Expanded with KYC, Credit, and Limits)
 CREATE OR REPLACE VIEW active_accounts_view AS
 SELECT 
     c.customer_id,
@@ -13,11 +13,29 @@ SELECT
     u.user_id,
     u.last_login,
     u.profile_image,
-    (SELECT attempt_time FROM login_attempts WHERE user_id = u.user_id AND success = TRUE ORDER BY attempt_time DESC OFFSET 1 LIMIT 1) AS previous_login
+    (SELECT attempt_time FROM login_attempts WHERE user_id = u.user_id AND success = TRUE ORDER BY attempt_time DESC OFFSET 1 LIMIT 1) AS previous_login,
+    c.kyc_status,
+    c.credit_score,
+    a.interest_rate,
+    a.overdraft_limit,
+    a.currency
 FROM users u
 JOIN customers c ON u.user_id = c.user_id
 JOIN accounts a ON c.customer_id = a.customer_id
 WHERE a.status = 'active';
+
+-- Recent System Audit Logs
+CREATE OR REPLACE VIEW recent_audit_view AS
+SELECT 
+    l.log_id,
+    COALESCE(u.username, 'System') as actor,
+    l.action,
+    l.table_name,
+    l.log_time
+FROM audit_log l
+LEFT JOIN users u ON l.user_id = u.user_id
+ORDER BY l.log_time DESC
+LIMIT 20;
 
 -- Overdue loans
 CREATE OR REPLACE VIEW overdue_loans_view AS

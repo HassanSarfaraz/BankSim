@@ -190,8 +190,11 @@
                 <tr>
                     <th>Profile</th>
                     <th>Customer</th>
+                    <th>KYC</th>
+                    <th>Score</th>
                     <th>Account #</th>
                     <th>Type</th>
+                    <th>Rate</th>
                     <th>Balance</th>
                     <th>Status</th>
                     <th>Last Login</th>
@@ -208,8 +211,17 @@
                              onerror="this.style.display='none'">
                     </td>
                     <td>{{ acc[1] }}</td>
+                    <td>
+                        <span class="status-badge" style="background: {% if acc[11] == 'verified' %}rgba(16,185,129,0.15){% else %}rgba(234,179,8,0.15){% endif %}; color: {% if acc[11] == 'verified' %}#10b981{% else %}#eab308{% endif %}; font-size: 0.7rem;">
+                            {{ acc[11]|upper }}
+                        </span>
+                    </td>
+                    <td style="font-weight: bold; color: {% if acc[12] > 700 %}#10b981{% elif acc[12] > 600 %}#eab308{% else %}#ef4444{% endif %};">
+                        {{ acc[12] }}
+                    </td>
                     <td>{{ acc[2] }}</td>
                     <td style="text-transform: capitalize;">{{ acc[3] }}</td>
+                    <td style="color: var(--text-muted); font-size: 0.8rem;">{{ (acc[13] * 100)|round(2) }}%</td>
                     <td style="font-weight: 600;">${{ acc[4] }}</td>
                     <td>
                         {% if acc[6] %}
@@ -256,6 +268,7 @@
                     <th>Type</th>
                     <th>Description</th>
                     <th>Amount</th>
+                    <th>Running Balance</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -267,6 +280,7 @@
                     <td style="text-transform: capitalize;">{{ txn[1] }}</td>
                     <td>{{ txn[4] }}</td>
                     <td style="font-weight: 600; color: {% if txn[1] == 'deposit' %}var(--accent){% else %}var(--text){% endif %};">${{ txn[2] }}</td>
+                    <td style="font-weight: 600; color: var(--text-muted);">${{ txn[7] or 'N/A' }}</td>
                     <td>
                         <form action="{{ url_for('admin.undo_transaction', transaction_id=txn[0]) }}" method="POST" onsubmit="return confirm('Are you sure you want to undo this transaction?');">
                             <button type="submit" class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; border: 1px solid #eab308; color: #eab308;">Undo</button>
@@ -275,6 +289,33 @@
                 </tr>
                 {% else %}
                 <tr><td colspan="6" style="text-align:center; color:var(--text-muted)">No transactions found</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- System Audit Logs -->
+    <div class="glass card" style="margin-top: 2rem; margin-bottom: 3rem;">
+        <h3>Recent System Audit Logs</h3>
+        <table style="width: 100%;">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Actor</th>
+                    <th>Action</th>
+                    <th>Target Table</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in audit_logs %}
+                <tr>
+                    <td style="font-size: 0.85rem; color: var(--text-muted);">{{ log[4].strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td style="font-weight: 600;">{{ log[1] }}</td>
+                    <td>{{ log[2] }}</td>
+                    <td><code style="background: rgba(255,255,255,0.1); padding: 0.1rem 0.3rem; border-radius: 3px;">{{ log[3] }}</code></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" style="text-align:center; color:var(--text-muted)">No audit logs recorded</td></tr>
                 {% endfor %}
             </tbody>
         </table>
