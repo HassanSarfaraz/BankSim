@@ -33,12 +33,8 @@ def dashboard():
 
     # ── System-Wide Accounts ────────────────────────────────────────────────────
     cur.execute("""
-        SELECT c.customer_id, c.first_name || ' ' || c.last_name,
-               a.account_number, a.account_type, a.balance, a.status, u.is_active, u.user_id
-        FROM users u
-        JOIN customers c ON u.user_id = c.user_id
-        JOIN accounts a ON c.customer_id = a.customer_id
-        ORDER BY c.customer_id
+        SELECT * FROM active_accounts_view
+        ORDER BY customer_id
         LIMIT 100
     """)
     active_accounts = cur.fetchall()
