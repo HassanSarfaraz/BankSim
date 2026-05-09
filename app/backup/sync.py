@@ -2,7 +2,7 @@ from ..firebase.firestore import db_firestore
 from ..models.db import get_db_conn
 import psycopg2.extras
 
-SYNC_TABLES = ['users', 'customers', 'accounts', 'transactions', 'loans']
+SYNC_TABLES = ['users', 'customers', 'accounts', 'transactions', 'loans', 'deposit_requests']
 
 def postgres_to_firebase():
     """Backup: Postgres -> Firestore"""
@@ -73,7 +73,8 @@ def firebase_to_postgres():
                 'customers': 'customer_id',
                 'accounts': 'account_id',
                 'transactions': 'transaction_id',
-                'loans': 'loan_id'
+                'loans': 'loan_id',
+                'deposit_requests': 'request_id'
             }
             pk_col = TABLE_PKS.get(table)
             

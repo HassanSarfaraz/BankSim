@@ -81,6 +81,27 @@
             </form>
         </div>
 
+        <!-- Request Deposit -->
+        <div class="glass card" style="margin-top: 2rem;">
+            <h3>Request Cash Deposit</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">Request admin to deposit cash into your account.</p>
+            <form action="{{ url_for('customer.request_deposit') }}" method="POST">
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.8rem; color: var(--text-muted);">To Account</label>
+                    <select name="account_id" class="glass" style="width: 100%; padding: 0.5rem; color: white;">
+                        {% for acc in accounts %}
+                        <option value="{{ acc[2] }}">{{ acc[3] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.8rem; color: var(--text-muted);">Amount ($)</label>
+                    <input type="number" step="0.01" name="amount" class="glass" style="width: 100%; padding: 0.5rem; color: white;" placeholder="0.00">
+                </div>
+                <button type="submit" class="btn" style="width: 100%; border: 1px solid var(--accent); color: var(--accent);">Submit Request</button>
+            </form>
+        </div>
+
         <!-- Document Upload (Media Storage Req) -->
         <div class="glass card" style="margin-top: 2rem;">
             <h3>KYC Document Upload</h3>

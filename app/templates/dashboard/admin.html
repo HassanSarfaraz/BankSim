@@ -11,7 +11,7 @@
     </div>
 
     <div class="dashboard-grid">
-        <!-- Fraud Alerts (View Requirement) -->
+        <!-- Fraud Alerts -->
         <div class="glass card">
             <h3>Recent Fraud Alerts</h3>
             <table>
@@ -40,32 +40,46 @@
             </table>
         </div>
 
-        <!-- System Maintenance -->
+        <!-- Pending Deposit Requests -->
         <div class="glass card">
-            <h3>Maintenance Tasks</h3>
-            <div style="margin-bottom: 2rem;">
-                <p style="font-size: 0.9rem; color: var(--text-muted);">Post monthly interest to all active savings accounts using SQL stored procedure.</p>
-                <form action="{{ url_for('admin.post_interest') }}" method="POST">
-                    <button type="submit" class="btn" style="width: 100%; border: 1px solid var(--primary); color: var(--primary);">Post Monthly Interest</button>
-                </form>
-            </div>
-            
-            <div>
-                <h4>Database Health</h4>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                    <span>Sync Status</span>
-                    <span id="sync-status" style="color: var(--accent);">Synchronized</span>
-                </div>
-                <div style="background: rgba(255,255,255,0.1); height: 4px; border-radius: 2px;">
-                    <div style="background: var(--accent); width: 100%; height: 100%; border-radius: 2px;"></div>
-                </div>
-            </div>
+            <h3>Pending Deposit Requests</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Customer</th>
+                        <th>Amount</th>
+                        <th>Date</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for req in deposit_requests %}
+                    <tr>
+                        <td>{{ req[4] }}<br><small style="color:var(--text-muted)">{{ req[1] }}</small></td>
+                        <td style="font-weight: bold; color: var(--accent);">${{ req[2] }}</td>
+                        <td>{{ req[3].strftime('%d/%m/%y') }}</td>
+                        <td>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <form action="{{ url_for('admin.handle_deposit', request_id=req[0], action='accept') }}" method="POST">
+                                    <button type="submit" class="btn btn-primary" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">Accept</button>
+                                </form>
+                                <form action="{{ url_for('admin.handle_deposit', request_id=req[0], action='reject') }}" method="POST">
+                                    <button type="submit" class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; border: 1px solid #ef4444; color: #ef4444;">Reject</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" style="text-align:center; color:var(--text-muted)">No pending requests</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 
     <!-- Active Accounts Overview -->
     <div class="glass card" style="margin-top: 2rem;">
-        <h3>System-Wide Active Accounts</h3>
+        <h3>System-Wide Accounts</h3>
         <table>
             <thead>
                 <tr>
@@ -74,6 +88,7 @@
                     <th>Type</th>
                     <th>Balance</th>
                     <th>Status</th>
+                    <th>Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -84,10 +99,51 @@
                     <td style="text-transform: capitalize;">{{ acc[3] }}</td>
                     <td style="font-weight: 600;">${{ acc[4] }}</td>
                     <td>
-                        <span class="status-badge status-{{ acc[5] }}">{{ acc[5] }}</span>
-                        {% if not acc[6] %}
-                        <span class="status-badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; margin-left: 0.5rem;">Locked</span>
+                        {% if acc[6] %}
+                        <span class="status-badge status-active">Active</span>
+                        {% else %}
+                        <span class="status-badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">Locked</span>
                         {% endif %}
+                    </td>
+                    <td>
+                        <form action="{{ url_for('admin.toggle_lock', user_id=acc[7]) }}" method="POST">
+                            <button type="submit" class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; border: 1px solid {% if acc[6] %}#ef4444{% else %}var(--primary){% endif %}; color: {% if acc[6] %}#ef4444{% else %}var(--primary){% endif %};">
+                                {% if acc[6] %}Lock{% else %}Unlock{% endif %}
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Global Transactions -->
+    <div class="glass card" style="margin-top: 2rem;">
+        <h3>Global Transactions</h3>
+        <table style="width: 100%;">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Account</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for txn in global_transactions %}
+                <tr>
+                    <td>{{ txn[3].strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>{{ txn[5] }}</td>
+                    <td style="text-transform: capitalize;">{{ txn[1] }}</td>
+                    <td>{{ txn[4] }}</td>
+                    <td style="font-weight: 600; color: {% if txn[1] == 'deposit' %}var(--accent){% else %}var(--text){% endif %};">${{ txn[2] }}</td>
+                    <td>
+                        <form action="{{ url_for('admin.undo_transaction', transaction_id=txn[0]) }}" method="POST" onsubmit="return confirm('Are you sure you want to undo this transaction?');">
+                            <button type="submit" class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; border: 1px solid #eab308; color: #eab308;">Undo</button>
+                        </form>
                     </td>
                 </tr>
                 {% endfor %}
@@ -99,22 +155,20 @@
 <script>
 function syncFirebase(action) {
     const url = action === 'push' ? '/admin/backup/push' : '/admin/backup/pull';
-    document.getElementById('sync-status').innerText = 'Syncing...';
+    alert('Syncing... Please wait.');
     
     fetch(url, { method: 'POST' })
     .then(res => res.json())
     .then(data => {
         if (data.status === 'success') {
             alert('Cloud synchronization complete!');
-            document.getElementById('sync-status').innerText = 'Synchronized';
+            window.location.reload();
         } else {
             alert('Error: ' + data.message);
-            document.getElementById('sync-status').innerText = 'Sync Failed';
         }
     })
     .catch(err => {
         alert('Sync error occurred');
-        document.getElementById('sync-status').innerText = 'Error';
     });
 }
 </script>

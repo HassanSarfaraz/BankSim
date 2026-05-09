@@ -104,3 +104,29 @@ def upload_kyc():
         flash("Document uploaded successfully.", "success")
         
     return redirect(url_for('customer.dashboard'))
+
+@customer_bp.route('/request_deposit', methods=['POST'])
+def request_deposit():
+    account_id = request.form.get('account_id')
+    amount = float(request.form.get('amount'))
+    
+    conn = get_db_conn()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute("INSERT INTO deposit_requests (account_id, amount) VALUES (%s, %s)", (account_id, amount))
+        conn.commit()
+        
+        # Mirror to Firebase explicitly if needed, but the admin's push/pull will handle it if deposit_requests is in SYNC_TABLES
+        sync_doc_to_firestore('deposit_requests', f"req_{account_id}_{amount}", {
+            'account_id': account_id,
+            'amount': amount,
+            'status': 'pending'
+        })
+        
+        flash("Deposit request submitted successfully. Awaiting admin approval.", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error submitting request: {str(e)}", "danger")
+        
+    return redirect(url_for('customer.dashboard'))
