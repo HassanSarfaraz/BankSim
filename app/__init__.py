@@ -7,6 +7,11 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
     
+    # Force deterministic secret key and permanent sessions
+    app.config['SECRET_KEY'] = 'banksim-super-secret-key-permanent-2025'
+    from datetime import timedelta
+    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+    
     # Initialize DB and Firebase
     init_db(app)
     init_firebase(app)

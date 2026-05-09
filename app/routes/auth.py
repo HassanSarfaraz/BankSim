@@ -30,6 +30,7 @@ def login():
                 is_valid = (password == pw_hash) # Fallback for seed data if not hashed
                 
             if is_valid:
+                session.permanent = True # Ensure session persists
                 session['user_id'] = user_id
                 session['role_id'] = role_id
                 session['username'] = username
