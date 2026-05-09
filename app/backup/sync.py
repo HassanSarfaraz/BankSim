@@ -16,7 +16,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Tables synced to Firebase (in FK dependency order for restore)
-SYNC_TABLES = ['users', 'customers', 'accounts', 'transactions', 'loans', 'deposit_requests', 'account_requests', 'fraud_alerts']
+# IMPORTANT: transactions is PARTITIONED — sync the child tables directly, NOT the parent.
+# Syncing the parent would cause every row to appear in all children on restore.
+SYNC_TABLES = ['users', 'customers', 'accounts', 'transactions_2025', 'transactions_2026',
+               'loans', 'deposit_requests', 'account_requests', 'fraud_alerts']
 
 # Primary key for each table
 TABLE_PKS = {
@@ -24,6 +27,8 @@ TABLE_PKS = {
     'customers': 'customer_id',
     'accounts': 'account_id',
     'transactions': 'transaction_id',
+    'transactions_2025': 'transaction_id',
+    'transactions_2026': 'transaction_id',
     'loans': 'loan_id',
     'deposit_requests': 'request_id',
     'account_requests': 'request_id',

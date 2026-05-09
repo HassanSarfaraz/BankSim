@@ -1,23 +1,37 @@
+import os
 from flask import Flask
 from .models.db import init_app as init_db
 from .firebase.firestore import init_firebase
 from config import Config
 from datetime import timedelta
+from flask_session import Session
 
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # ── Session: hard-coded key so cookie is NEVER invalidated on restart ──────
+    # ── Hard-coded SECRET_KEY so cookie is NEVER invalidated on restart ──────────
     app.config['SECRET_KEY'] = 'banksim-fixed-secret-key-do-not-change-2025'
-    app.config['SESSION_COOKIE_NAME'] = 'banksim_session'
+
+    # ── Server-side filesystem sessions (most reliable — no cookie size limits,
+    #    survives reloader restarts, works across all routes) ─────────────────────
+    sessions_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'flask_sessions')
+    os.makedirs(sessions_dir, exist_ok=True)
+
+    app.config['SESSION_TYPE'] = 'filesystem'
+    app.config['SESSION_FILE_DIR'] = sessions_dir
+    app.config['SESSION_FILE_THRESHOLD'] = 500          # max session files
+    app.config['SESSION_PERMANENT'] = True
+    app.config['SESSION_USE_SIGNER'] = True             # sign session IDs
+    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+    app.config['SESSION_COOKIE_NAME'] = 'banksim_sid'
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-    app.config['SESSION_COOKIE_SECURE'] = False       # True only on HTTPS/prod
+    app.config['SESSION_COOKIE_SECURE'] = False          # True only on HTTPS
     app.config['SESSION_COOKIE_PATH'] = '/'
-    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
-    app.config['SESSION_REFRESH_EACH_REQUEST'] = True
+
+    Session(app)  # initialize server-side sessions
 
     # ── Init DB and Firebase ───────────────────────────────────────────────────
     init_db(app)

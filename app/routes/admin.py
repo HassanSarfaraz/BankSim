@@ -130,28 +130,56 @@ def handle_fraud(alert_id, action):
 
         txn_id, account_id = res
 
-        if action == 'approve':
-            # Get transaction details before approving
-            cur.execute("SELECT transaction_type, amount FROM transactions WHERE transaction_id = %s", (txn_id,))
-            txn = cur.fetchone()
-            cur.execute("UPDATE transactions SET status = 'completed' WHERE transaction_id = %s", (txn_id,))
-            cur.execute("UPDATE fraud_alerts SET status = 'resolved' WHERE alert_id = %s", (alert_id,))
-            conn.commit()
-            # Push transaction update to Firebase
-            if txn:
-                push_record('transactions', txn_id, {
-                    'transaction_id': txn_id, 'account_id': account_id,
-                    'transaction_type': txn[0], 'amount': txn[1], 'status': 'completed'
-                })
-            push_record('fraud_alerts', alert_id, {'alert_id': alert_id, 'status': 'resolved'})
-            flash("Transaction approved and balance updated.", "success")
+        # Get the transaction details
+        cur.execute("SELECT transaction_type, amount, description FROM transactions WHERE transaction_id = %s", (txn_id,))
+        txn = cur.fetchone()
+        if not txn:
+            flash("Linked transaction not found.", "danger")
+            return redirect(url_for('admin.dashboard'))
 
-        elif action == 'reject':
-            cur.execute("UPDATE transactions SET status = 'failed' WHERE transaction_id = %s", (txn_id,))
-            cur.execute("UPDATE fraud_alerts SET status = 'rejected' WHERE alert_id = %s", (alert_id,))
-            conn.commit()
-            push_record('fraud_alerts', alert_id, {'alert_id': alert_id, 'status': 'rejected'})
-            flash("Transaction rejected and blocked.", "info")
+        txn_type, txn_amount, txn_desc = txn
+
+        new_txn_status = 'completed' if action == 'approve' else 'failed'
+        new_alert_status = 'resolved' if action == 'approve' else 'rejected'
+
+        # Update this transaction
+        cur.execute("UPDATE transactions SET status = %s WHERE transaction_id = %s", (new_txn_status, txn_id))
+        cur.execute("UPDATE fraud_alerts SET status = %s WHERE alert_id = %s", (new_alert_status, alert_id))
+
+        # Find and resolve the paired transaction (the other half of a transfer with same desc+amount)
+        # This prevents the paired fraud alert from remaining open as a duplicate
+        if txn_type == 'withdrawal':
+            paired_type = 'deposit'
+        elif txn_type == 'deposit':
+            paired_type = 'withdrawal'
+        else:
+            paired_type = None
+
+        if paired_type:
+            cur.execute("""
+                SELECT t.transaction_id FROM transactions t
+                JOIN fraud_alerts fa ON fa.transaction_id = t.transaction_id
+                WHERE t.transaction_type = %s
+                  AND t.amount = %s
+                  AND t.description = %s
+                  AND t.status = 'pending'
+                  AND fa.status = 'open'
+                  AND t.transaction_id != %s
+                LIMIT 1
+            """, (paired_type, txn_amount, txn_desc, txn_id))
+            paired = cur.fetchone()
+            if paired:
+                paired_txn_id = paired[0]
+                cur.execute("UPDATE transactions SET status = %s WHERE transaction_id = %s", (new_txn_status, paired_txn_id))
+                cur.execute("UPDATE fraud_alerts SET status = %s WHERE transaction_id = %s AND status = 'open'", (new_alert_status, paired_txn_id))
+
+        conn.commit()
+        push_record('fraud_alerts', alert_id, {'alert_id': str(alert_id), 'status': new_alert_status})
+
+        if action == 'approve':
+            flash("Transaction approved — balance updated for both sender and receiver.", "success")
+        else:
+            flash("Transaction rejected and blocked for both parties.", "info")
 
     except Exception as e:
         conn.rollback()
@@ -205,7 +233,8 @@ def handle_deposit(request_id, action):
             req = cur.fetchone()
             if req:
                 acc_id, amount = req
-                cur.execute("UPDATE accounts SET balance = balance + %s WHERE account_id = %s", (amount, acc_id))
+                # Insert completed transaction — trigger updates balance automatically.
+                # Do NOT add a separate UPDATE accounts here — that would double the balance.
                 cur.execute(
                     "INSERT INTO transactions (account_id, transaction_type, amount, description, status) "
                     "VALUES (%s, 'deposit', %s, 'Admin-Approved Cash Deposit', 'completed')",

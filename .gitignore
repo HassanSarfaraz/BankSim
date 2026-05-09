@@ -14,3 +14,5 @@ venv/
 # Flask
 instance/
 .webassets-cache
+
+flask_sessions/
