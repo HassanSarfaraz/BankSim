@@ -33,39 +33,54 @@ CREATE TRIGGER trg_intercept_large_txn
 BEFORE INSERT ON transactions
 FOR EACH ROW EXECUTE FUNCTION intercept_large_transaction();
 
--- 3. Update balance ONLY if transaction is completed
+-- 3. Update balance ONLY if transaction is completed (and set balance_after)
 CREATE OR REPLACE FUNCTION update_balance_after_txn()
 RETURNS TRIGGER AS $$
+DECLARE
+    v_new_balance DECIMAL(15,2);
 BEGIN
     IF NEW.status = 'completed' THEN
+        -- Calculate and update account balance
         IF NEW.transaction_type = 'deposit' THEN
             UPDATE accounts SET balance = balance + NEW.amount
-            WHERE account_id = NEW.account_id;
+            WHERE account_id = NEW.account_id
+            RETURNING balance INTO v_new_balance;
         ELSIF NEW.transaction_type IN ('withdrawal', 'transfer', 'payment', 'fee') THEN
             UPDATE accounts SET balance = balance - NEW.amount
-            WHERE account_id = NEW.account_id;
+            WHERE account_id = NEW.account_id
+            RETURNING balance INTO v_new_balance;
         END IF;
+        
+        -- Store the snapshot in the transaction record
+        NEW.balance_after := v_new_balance;
     END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_update_balance
-AFTER INSERT ON transactions
+BEFORE INSERT ON transactions
 FOR EACH ROW EXECUTE FUNCTION update_balance_after_txn();
 
--- 4. Update balance when a pending transaction is approved
+-- 4. Update balance when a pending transaction is approved (and set balance_after)
 CREATE OR REPLACE FUNCTION update_balance_after_txn_update()
 RETURNS TRIGGER AS $$
+DECLARE
+    v_new_balance DECIMAL(15,2);
 BEGIN
     IF OLD.status = 'pending' AND NEW.status = 'completed' THEN
         IF NEW.transaction_type = 'deposit' THEN
             UPDATE accounts SET balance = balance + NEW.amount
-            WHERE account_id = NEW.account_id;
+            WHERE account_id = NEW.account_id
+            RETURNING balance INTO v_new_balance;
         ELSIF NEW.transaction_type IN ('withdrawal', 'transfer', 'payment', 'fee') THEN
             UPDATE accounts SET balance = balance - NEW.amount
-            WHERE account_id = NEW.account_id;
+            WHERE account_id = NEW.account_id
+            RETURNING balance INTO v_new_balance;
         END IF;
+        
+        -- Update the transaction record with the new balance snapshot
+        UPDATE transactions SET balance_after = v_new_balance WHERE transaction_id = NEW.transaction_id;
     END IF;
     RETURN NEW;
 END;

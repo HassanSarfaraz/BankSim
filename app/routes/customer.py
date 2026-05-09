@@ -101,7 +101,7 @@ def transfer():
         cur.execute("CALL transfer_funds(%s, %s, %s, %s)", (from_acc_id, to_acc_id, amount, desc))
         conn.commit()
 
-        # Push updated balances to Firebase
+        # Push updated balances and transactions to Firebase
         for acc_id in [from_acc_id, to_acc_id]:
             cur.execute("SELECT account_id, balance, status FROM accounts WHERE account_id = %s", (acc_id,))
             acc = cur.fetchone()
@@ -110,6 +110,22 @@ def transfer():
                     'account_id': str(acc[0]),
                     'balance': str(acc[1]),
                     'status': str(acc[2])
+                })
+            
+            # Push the latest transaction for this account
+            cur.execute("SELECT * FROM transactions WHERE account_id = %s ORDER BY transaction_date DESC LIMIT 1", (acc_id,))
+            t_data = cur.fetchone()
+            if t_data:
+                # (transaction_id(0), account_id(1), type(2), amount(3), balance_after(4), desc(5), ref(6), status(7), date(8))
+                push_record('transactions_2026', t_id := t_data[0], {
+                    'transaction_id': t_id,
+                    'account_id': t_data[1],
+                    'transaction_type': t_data[2],
+                    'amount': str(t_data[3]),
+                    'balance_after': str(t_data[4]) if t_data[4] else None,
+                    'description': t_data[5],
+                    'status': t_data[7],
+                    'transaction_date': t_data[8].isoformat() if t_data[8] else None
                 })
 
         if amount >= 10000:
@@ -260,9 +276,9 @@ def open_account():
             
         customer_id = c_res[0]
         
-        # Generate random account number
+        # Generate standardized account number
         import random
-        acc_num = f"PK-BANK-{random.randint(10000, 99999)}"
+        acc_num = f"PK99-BANK-{random.randint(10000, 99999)}"
         
         # Insert new account with pending status
         cur.execute(

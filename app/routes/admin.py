@@ -185,6 +185,10 @@ def handle_fraud(alert_id, action):
                 paired_txn_id = paired[0]
                 cur.execute("UPDATE transactions SET status = %s WHERE transaction_id = %s", (new_txn_status, paired_txn_id))
                 cur.execute("UPDATE fraud_alerts SET status = %s WHERE transaction_id = %s AND status = 'open'", (new_alert_status, paired_txn_id))
+                
+                # Push both to Firebase
+                push_record('transactions_2026', txn_id, {'status': new_txn_status})
+                push_record('transactions_2026', paired_txn_id, {'status': new_txn_status})
 
         conn.commit()
         push_record('fraud_alerts', alert_id, {'alert_id': str(alert_id), 'status': new_alert_status})
