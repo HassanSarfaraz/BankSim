@@ -40,11 +40,19 @@
                         <td style="color: var(--accent);">${{ alert[6] or '0.00' }}</td>
                         <td>{{ alert[3].strftime('%H:%M %d/%m/%y') }}</td>
                         <td>
-                            {% if alert[7] %}
-                            <form action="{{ url_for('admin.toggle_lock', user_id=alert[7]) }}" method="POST">
-                                <button type="submit" class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; border: 1px solid #ef4444; color: #ef4444;">Lock Acc</button>
-                            </form>
-                            {% endif %}
+                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                {% if alert[7] %}
+                                <form action="{{ url_for('admin.toggle_lock', user_id=alert[7]) }}" method="POST">
+                                    <button type="submit" class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; border: 1px solid #ef4444; color: #ef4444;">Lock Acc</button>
+                                </form>
+                                {% endif %}
+                                <form action="{{ url_for('admin.handle_fraud', alert_id=alert[0], action='approve') }}" method="POST">
+                                    <button type="submit" class="btn btn-primary" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">Approve Txn</button>
+                                </form>
+                                <form action="{{ url_for('admin.handle_fraud', alert_id=alert[0], action='reject') }}" method="POST">
+                                    <button type="submit" class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; border: 1px solid #ef4444; color: #ef4444;">Reject Txn</button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                     {% else %}

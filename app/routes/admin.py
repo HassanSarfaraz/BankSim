@@ -185,3 +185,33 @@ def post_interest():
         flash(f"Error: {str(e)}", "danger")
     return redirect(url_for('admin.dashboard'))
 
+@admin_bp.route('/handle_fraud/<int:alert_id>/<action>', methods=['POST'])
+def handle_fraud(alert_id, action):
+    conn = get_db_conn()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT transaction_id FROM fraud_alerts WHERE alert_id = %s", (alert_id,))
+        res = cur.fetchone()
+        
+        if not res or not res[0]:
+            flash("Alert or associated transaction not found.", "danger")
+            return redirect(url_for('admin.dashboard'))
+            
+        txn_id = res[0]
+        
+        if action == 'approve':
+            cur.execute("UPDATE transactions SET status = 'completed' WHERE transaction_id = %s", (txn_id,))
+            cur.execute("UPDATE fraud_alerts SET status = 'resolved' WHERE alert_id = %s", (alert_id,))
+            flash("Suspicious transaction approved and processed.", "success")
+        elif action == 'reject':
+            cur.execute("UPDATE transactions SET status = 'failed' WHERE transaction_id = %s", (txn_id,))
+            cur.execute("UPDATE fraud_alerts SET status = 'rejected' WHERE alert_id = %s", (alert_id,))
+            flash("Suspicious transaction rejected and blocked.", "info")
+            
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error handling fraud alert: {str(e)}", "danger")
+        
+    return redirect(url_for('admin.dashboard'))
+

@@ -1,24 +1,3 @@
--- triggers.sql
-
--- 1. Auto-lock after 5 failed logins
-CREATE OR REPLACE FUNCTION check_login_attempts()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF (SELECT COUNT(*) FROM login_attempts
-        WHERE user_id = NEW.user_id
-          AND success = FALSE
-          AND attempt_time > NOW() - INTERVAL '15 minutes') >= 5 THEN
-        UPDATE users SET is_active = FALSE WHERE user_id = NEW.user_id;
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_login_lockout
-AFTER INSERT ON login_attempts
-FOR EACH ROW EXECUTE FUNCTION check_login_attempts();
-
--- 2. Intercept large transactions to require approval
 CREATE OR REPLACE FUNCTION intercept_large_transaction()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -29,11 +8,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_intercept_large_txn ON transactions;
 CREATE TRIGGER trg_intercept_large_txn
 BEFORE INSERT ON transactions
 FOR EACH ROW EXECUTE FUNCTION intercept_large_transaction();
 
--- 3. Update balance ONLY if transaction is completed
 CREATE OR REPLACE FUNCTION update_balance_after_txn()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -50,11 +29,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_update_balance
-AFTER INSERT ON transactions
-FOR EACH ROW EXECUTE FUNCTION update_balance_after_txn();
-
--- 4. Update balance when a pending transaction is approved
 CREATE OR REPLACE FUNCTION update_balance_after_txn_update()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -71,11 +45,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_update_balance_on_approve ON transactions;
 CREATE TRIGGER trg_update_balance_on_approve
 AFTER UPDATE ON transactions
 FOR EACH ROW EXECUTE FUNCTION update_balance_after_txn_update();
 
--- 5. Auto-flag large transactions for compliance
 CREATE OR REPLACE FUNCTION flag_large_transaction()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -86,7 +60,3 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_flag_large_txn
-AFTER INSERT ON transactions
-FOR EACH ROW EXECUTE FUNCTION flag_large_transaction();
