@@ -24,10 +24,9 @@ def fix():
         print("Standardizing account numbers...")
         cur.execute("UPDATE accounts SET account_number = REPLACE(account_number, 'PK-BANK', 'PK99-BANK')")
         
-        # 3. Set test profile images for default users
-        print("Setting test profile images...")
-        cur.execute("UPDATE users SET profile_image = 'profile_pics/default.png' WHERE user_id = 1")
-        cur.execute("UPDATE users SET profile_image = 'profile_pics/2.jpg' WHERE user_id = 2")
+        # 3. Set profile image paths dynamically for ALL users
+        print("Standardizing profile image paths for all users...")
+        cur.execute("UPDATE users SET profile_image = 'profile_pics/' || user_id || '.png' WHERE profile_image IS NULL")
         
         conn.commit()
         
