@@ -1,15 +1,17 @@
 -- views.sql
 
 -- Active customer accounts overview
-CREATE VIEW active_accounts_view AS
+CREATE OR REPLACE VIEW active_accounts_view AS
 SELECT 
     c.customer_id,
     c.first_name || ' ' || c.last_name AS customer_name,
     a.account_number,
     a.account_type,
     a.balance,
-    a.status
-FROM customers c
+    a.status,
+    u.is_active
+FROM users u
+JOIN customers c ON u.user_id = c.user_id
 JOIN accounts a ON c.customer_id = a.customer_id
 WHERE a.status = 'active';
 
