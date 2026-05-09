@@ -43,7 +43,7 @@ def dashboard():
     """, (session['user_id'],))
     transactions = cur.fetchall()
 
-    cur.execute("SELECT last_login FROM users WHERE user_id = %s", (session['user_id'],))
+    cur.execute("SELECT previous_login FROM users WHERE user_id = %s", (session['user_id'],))
     last_login_res = cur.fetchone()
     last_login = last_login_res[0] if last_login_res else None
 

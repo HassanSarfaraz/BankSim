@@ -15,6 +15,7 @@ CREATE TABLE users (
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW(),
     last_login TIMESTAMP,
+    previous_login TIMESTAMP,
     profile_image VARCHAR(255)
 );
 CREATE INDEX idx_users_email ON users(email);
@@ -40,7 +41,7 @@ CREATE TABLE accounts (
     account_id BIGSERIAL PRIMARY KEY,
     account_number VARCHAR(20) UNIQUE NOT NULL,
     customer_id BIGINT REFERENCES customers(customer_id),
-    account_type VARCHAR(20) CHECK (account_type IN ('checking','savings','credit','loan')),
+    account_type VARCHAR(20) CHECK (account_type IN ('checking','savings','credit','loan','business')),
     balance DECIMAL(15,2) DEFAULT 0.00,
     currency VARCHAR(3) DEFAULT 'USD',
     status VARCHAR(20) DEFAULT 'active',

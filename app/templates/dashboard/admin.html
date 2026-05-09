@@ -181,7 +181,7 @@
                         {% endif %}
                     </td>
                     <td style="font-size: 0.85rem; color: var(--text-muted);">
-                        {{ acc[8].strftime('%d/%m %H:%M') if acc[8] else 'Never' }}
+                        {{ acc[10].strftime('%d/%m %H:%M') if acc[10] else 'Never' }}
                     </td>
                     <td>
                         <form action="{{ url_for('admin.toggle_lock', user_id=acc[7]) }}" method="POST">

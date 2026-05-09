@@ -37,7 +37,7 @@ def login():
                 
                 # Log success and update last_login
                 cur.execute("INSERT INTO login_attempts (user_id, success) VALUES (%s, TRUE)", (user_id,))
-                cur.execute("UPDATE users SET last_login = NOW() WHERE user_id = %s", (user_id,))
+                cur.execute("UPDATE users SET previous_login = last_login, last_login = NOW() WHERE user_id = %s", (user_id,))
                 conn.commit()
                 
                 if role_id == 1: return redirect(url_for('customer.dashboard'))

@@ -12,7 +12,8 @@ SELECT
     u.is_active,
     u.user_id,
     u.last_login,
-    u.profile_image
+    u.profile_image,
+    u.previous_login
 FROM users u
 JOIN customers c ON u.user_id = c.user_id
 JOIN accounts a ON c.customer_id = a.customer_id
