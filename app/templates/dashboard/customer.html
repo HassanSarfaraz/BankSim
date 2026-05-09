@@ -38,6 +38,7 @@
                         <th>Type</th>
                         <th>Amount</th>
                         <th>Description</th>
+                        <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -48,8 +49,17 @@
                         <td style="color: {% if txn[1] == 'deposit' %}#10b981{% else %}#ef4444{% endif %}; font-weight: 600;">
                             {% if txn[1] == 'deposit' %}+{% else %}-{% endif %}${{ txn[2] }}
                         </td>
-                        <td>{{ txn[4] }}</td>
+                        <td>{{ txn[4] or '—' }}</td>
+                        <td>
+                            <span style="font-size:0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px;
+                                background: {% if txn[5] == 'completed' %}rgba(16,185,129,0.15){% elif txn[5] == 'pending' %}rgba(234,179,8,0.15){% else %}rgba(239,68,68,0.15){% endif %};
+                                color: {% if txn[5] == 'completed' %}#10b981{% elif txn[5] == 'pending' %}#eab308{% else %}#ef4444{% endif %};">
+                                {{ txn[5] }}
+                            </span>
+                        </td>
                     </tr>
+                    {% else %}
+                    <tr><td colspan="5" style="text-align:center; color:var(--text-muted)">No transactions yet</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
