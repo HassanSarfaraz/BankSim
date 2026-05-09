@@ -150,17 +150,25 @@
         <table>
             <thead>
                 <tr>
+                    <th>Profile</th>
                     <th>Customer</th>
                     <th>Account #</th>
                     <th>Type</th>
                     <th>Balance</th>
                     <th>Status</th>
+                    <th>Last Login</th>
                     <th>Action</th>
                 </tr>
             </thead>
             <tbody>
                 {% for acc in active_accounts %}
                 <tr>
+                    <td>
+                        <img src="{{ url_for('static', filename='profile_pics/' ~ acc[2] ~ '.jpg') }}" 
+                             alt="Profile" 
+                             style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid var(--glass-border);"
+                             onerror="this.style.display='none'">
+                    </td>
                     <td>{{ acc[1] }}</td>
                     <td>{{ acc[2] }}</td>
                     <td style="text-transform: capitalize;">{{ acc[3] }}</td>
@@ -171,6 +179,9 @@
                         {% else %}
                         <span class="status-badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">Locked</span>
                         {% endif %}
+                    </td>
+                    <td style="font-size: 0.85rem; color: var(--text-muted);">
+                        {{ acc[8].strftime('%d/%m %H:%M') if acc[8] else 'Never' }}
                     </td>
                     <td>
                         <form action="{{ url_for('admin.toggle_lock', user_id=acc[7]) }}" method="POST">

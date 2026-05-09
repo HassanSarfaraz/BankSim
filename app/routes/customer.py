@@ -1,7 +1,9 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash
 from ..models.db import get_db_conn
 from ..backup.sync import push_record
+from ..firebase.firestore import sync_doc_to_firestore
 import psycopg2
+import os
 
 customer_bp = Blueprint('customer', __name__)
 
@@ -41,7 +43,11 @@ def dashboard():
     """, (session['user_id'],))
     transactions = cur.fetchall()
 
-    return render_template('dashboard/customer.html', accounts=accounts, transactions=transactions)
+    cur.execute("SELECT last_login FROM users WHERE user_id = %s", (session['user_id'],))
+    last_login_res = cur.fetchone()
+    last_login = last_login_res[0] if last_login_res else None
+
+    return render_template('dashboard/customer.html', accounts=accounts, transactions=transactions, last_login=last_login)
 
 
 @customer_bp.route('/transfer', methods=['POST'])
@@ -199,10 +205,35 @@ def upload_profile_pic():
     conn = get_db_conn()
     cur = conn.cursor()
     try:
-        cur.execute("UPDATE users SET profile_image = %s WHERE user_id = %s",
-                    (psycopg2.Binary(file.read()), session['user_id']))
+        # Get account number or fallback to username
+        cur.execute("SELECT c.customer_id FROM customers c WHERE c.user_id = %s", (session['user_id'],))
+        c_res = cur.fetchone()
+        identifier = session.get('username')
+        if c_res:
+            cur.execute("SELECT account_number FROM accounts WHERE customer_id = %s ORDER BY account_id LIMIT 1", (c_res[0],))
+            a_res = cur.fetchone()
+            if a_res:
+                identifier = a_res[0]
+                
+        # Save file locally
+        ext = file.filename.split('.')[-1]
+        filename = f"{identifier}.{ext}"
+        upload_dir = os.path.join('app', 'static', 'profile_pics')
+        os.makedirs(upload_dir, exist_ok=True)
+        file.save(os.path.join(upload_dir, filename))
+        
+        # Save relative path to PostgreSQL
+        db_path = f"profile_pics/{filename}"
+        cur.execute("UPDATE users SET profile_image = %s WHERE user_id = %s", (db_path, session['user_id']))
         conn.commit()
-        flash("Profile picture updated.", "success")
+        
+        # Sync text path to Firebase
+        try:
+            sync_doc_to_firestore('users', session['user_id'], {'profile_image': db_path})
+        except Exception as fb_e:
+            print(f"Warning: Firebase sync failed: {fb_e}")
+
+        flash("Profile picture updated successfully.", "success")
     except Exception as e:
         conn.rollback()
         flash(f"Error: {str(e)}", "danger")

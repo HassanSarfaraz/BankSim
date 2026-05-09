@@ -3,6 +3,9 @@
 {% block content %}
 <div class="dashboard-grid">
     <div class="animate-fade-in">
+        <div style="margin-bottom: 1.5rem; color: var(--text-muted); font-size: 0.9rem;">
+            Last Login: <span style="color: white; font-weight: 500;">{{ last_login.strftime('%A, %B %d, %Y at %I:%M %p') if last_login else 'First time login' }}</span>
+        </div>
         <!-- Accounts Overview -->
         <div class="glass card">
             <h3>My Accounts</h3>

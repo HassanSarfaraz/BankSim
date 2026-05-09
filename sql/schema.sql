@@ -15,7 +15,7 @@ CREATE TABLE users (
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW(),
     last_login TIMESTAMP,
-    profile_image BYTEA
+    profile_image VARCHAR(255)
 );
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_role ON users(role_id);

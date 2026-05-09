@@ -20,7 +20,7 @@ def login():
             user_id, pw_hash, role_id, is_active = user
             
             if not is_active:
-                flash("Your account is locked due to multiple failed attempts.", "danger")
+                flash("Account Locked", "danger")
                 return render_template('login.html')
             
             # Use bcrypt.checkpw if hash starts with $2b$, else simple check for dev
@@ -35,8 +35,9 @@ def login():
                 session['role_id'] = role_id
                 session['username'] = username
                 
-                # Log success
+                # Log success and update last_login
                 cur.execute("INSERT INTO login_attempts (user_id, success) VALUES (%s, TRUE)", (user_id,))
+                cur.execute("UPDATE users SET last_login = NOW() WHERE user_id = %s", (user_id,))
                 conn.commit()
                 
                 if role_id == 1: return redirect(url_for('customer.dashboard'))
