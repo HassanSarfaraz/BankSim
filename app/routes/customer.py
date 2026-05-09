@@ -86,22 +86,14 @@ def upload_kyc():
         cur = conn.cursor()
         
         import psycopg2
-        # Store in Postgres (BYTEA)
+        # Store purely in Postgres (BYTEA)
         cur.execute("""
             INSERT INTO media_storage (user_id, media_type, file_name, file_data)
-            VALUES (%s, %s, %s, %s) RETURNING media_id
+            VALUES (%s, %s, %s, %s)
         """, (session['user_id'], 'document', filename, psycopg2.Binary(file_data)))
         
-        media_id = cur.fetchone()[0]
         conn.commit()
-        
-        # Upload to Firebase Storage
-        fb_path = upload_to_firebase(file_data, filename, session['user_id'])
-        if fb_path:
-            cur.execute("UPDATE media_storage SET firebase_path = %s WHERE media_id = %s", (fb_path, media_id))
-            conn.commit()
-            
-        flash("Document uploaded successfully.", "success")
+        flash("Document securely uploaded to local database.", "success")
         
     return redirect(url_for('customer.dashboard'))
 
@@ -117,7 +109,7 @@ def request_deposit():
         cur.execute("INSERT INTO deposit_requests (account_id, amount) VALUES (%s, %s)", (account_id, amount))
         conn.commit()
         
-        # Mirror to Firebase explicitly if needed, but the admin's push/pull will handle it if deposit_requests is in SYNC_TABLES
+        # Mirror to Firebase explicitly if needed
         sync_doc_to_firestore('deposit_requests', f"req_{account_id}_{amount}", {
             'account_id': account_id,
             'amount': amount,
@@ -129,4 +121,27 @@ def request_deposit():
         conn.rollback()
         flash(f"Error submitting request: {str(e)}", "danger")
         
+    return redirect(url_for('customer.dashboard'))
+
+@customer_bp.route('/upload-profile-pic', methods=['POST'])
+def upload_profile_pic():
+    file = request.files.get('profile_pic')
+    if file:
+        file_data = file.read()
+        
+        conn = get_db_conn()
+        cur = conn.cursor()
+        import psycopg2
+        
+        try:
+            # Update the users table with the new profile image
+            cur.execute("""
+                UPDATE users SET profile_image = %s WHERE user_id = %s
+            """, (psycopg2.Binary(file_data), session['user_id']))
+            conn.commit()
+            flash("Profile picture updated successfully.", "success")
+        except Exception as e:
+            conn.rollback()
+            flash(f"Error uploading picture: {str(e)}", "danger")
+            
     return redirect(url_for('customer.dashboard'))

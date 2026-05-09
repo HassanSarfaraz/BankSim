@@ -56,3 +56,30 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for('auth.login'))
+
+@auth_bp.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        first_name = request.form.get('first_name')
+        last_name = request.form.get('last_name')
+        
+        pw_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
+        conn = get_db_conn()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                INSERT INTO account_requests (username, email, password_hash, first_name, last_name)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (username, email, pw_hash, first_name, last_name))
+            conn.commit()
+            flash("Account request submitted successfully. Please wait for admin approval.", "success")
+            return redirect(url_for('auth.login'))
+        except Exception as e:
+            conn.rollback()
+            flash("Error: Username or email might already be taken.", "danger")
+            
+    return render_template('signup.html')

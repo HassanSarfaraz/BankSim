@@ -12,7 +12,7 @@
 
     <div class="dashboard-grid">
         <!-- Fraud Alerts -->
-        <div class="glass card">
+        <div class="glass card" style="grid-column: span 2;">
             <h3>Recent Fraud Alerts</h3>
             <table>
                 <thead>
@@ -20,7 +20,10 @@
                         <th>Type</th>
                         <th>Severity</th>
                         <th>Account</th>
+                        <th>Recipient/Desc</th>
+                        <th>Amount</th>
                         <th>Date</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -33,8 +36,55 @@
                             </span>
                         </td>
                         <td>{{ alert[4] }}</td>
+                        <td>{{ alert[5] or 'N/A' }}</td>
+                        <td style="color: var(--accent);">${{ alert[6] or '0.00' }}</td>
                         <td>{{ alert[3].strftime('%H:%M %d/%m/%y') }}</td>
+                        <td>
+                            {% if alert[7] %}
+                            <form action="{{ url_for('admin.toggle_lock', user_id=alert[7]) }}" method="POST">
+                                <button type="submit" class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; border: 1px solid #ef4444; color: #ef4444;">Lock Acc</button>
+                            </form>
+                            {% endif %}
+                        </td>
                     </tr>
+                    {% else %}
+                    <tr><td colspan="7" style="text-align:center; color:var(--text-muted)">No open fraud alerts</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pending Account Requests -->
+        <div class="glass card">
+            <h3>New Account Requests</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Username/Email</th>
+                        <th>Date</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for req in account_requests %}
+                    <tr>
+                        <td>{{ req[3] }} {{ req[4] }}</td>
+                        <td>{{ req[1] }}<br><small style="color:var(--text-muted)">{{ req[2] }}</small></td>
+                        <td>{{ req[5].strftime('%d/%m/%y') }}</td>
+                        <td>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <form action="{{ url_for('admin.handle_account_request', request_id=req[0], action='accept') }}" method="POST">
+                                    <button type="submit" class="btn btn-primary" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">Accept</button>
+                                </form>
+                                <form action="{{ url_for('admin.handle_account_request', request_id=req[0], action='reject') }}" method="POST">
+                                    <button type="submit" class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; border: 1px solid #ef4444; color: #ef4444;">Reject</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" style="text-align:center; color:var(--text-muted)">No pending account requests</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -120,7 +170,18 @@
 
     <!-- Global Transactions -->
     <div class="glass card" style="margin-top: 2rem;">
-        <h3>Global Transactions</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3>Global Transactions</h3>
+            <form action="{{ url_for('admin.dashboard') }}" method="GET" style="display: flex; gap: 0.5rem; align-items: center;">
+                <label style="font-size: 0.9rem; color: var(--text-muted);">Show:</label>
+                <select name="txn_limit" class="glass" style="padding: 0.2rem 0.5rem; color: white;" onchange="this.form.submit()">
+                    <option value="10" {% if txn_limit == 10 %}selected{% endif %}>Last 10</option>
+                    <option value="50" {% if txn_limit == 50 %}selected{% endif %}>Last 50</option>
+                    <option value="100" {% if txn_limit == 100 %}selected{% endif %}>Last 100</option>
+                    <option value="0" {% if txn_limit == 0 %}selected{% endif %}>All Transactions</option>
+                </select>
+            </form>
+        </div>
         <table style="width: 100%;">
             <thead>
                 <tr>
@@ -146,6 +207,8 @@
                         </form>
                     </td>
                 </tr>
+                {% else %}
+                <tr><td colspan="6" style="text-align:center; color:var(--text-muted)">No transactions found</td></tr>
                 {% endfor %}
             </tbody>
         </table>

@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
+from werkzeug.security import generate_password_hash
 from ..models.db import get_db_conn
 from ..backup.sync import postgres_to_firebase, firebase_to_postgres
 
@@ -12,11 +13,11 @@ def dashboard():
     conn = get_db_conn()
     cur = conn.cursor()
     
-    # Use View: Open Fraud Alerts
+    # Use View: Open Fraud Alerts (updated schema with recipient info and user_id)
     cur.execute("SELECT * FROM open_fraud_alerts_view")
     alerts = cur.fetchall()
     
-    # Use View: Active Accounts (and locked ones) - fetching u.user_id to allow locking/unlocking
+    # Use View: Active Accounts
     cur.execute("""
         SELECT c.customer_id, c.first_name || ' ' || c.last_name AS customer_name,
                a.account_number, a.account_type, a.balance, a.status, u.is_active, u.user_id
@@ -28,13 +29,15 @@ def dashboard():
     """)
     active_accounts = cur.fetchall()
 
-    # Get Global Transactions
-    cur.execute("""
+    # Get Global Transactions with dynamic limit
+    txn_limit = request.args.get('txn_limit', 50, type=int)
+    limit_clause = f"LIMIT {txn_limit}" if txn_limit > 0 else ""
+    cur.execute(f"""
         SELECT t.transaction_id, t.transaction_type, t.amount, t.transaction_date, t.description, a.account_number
         FROM transactions t
         JOIN accounts a ON t.account_id = a.account_id
         ORDER BY t.transaction_date DESC
-        LIMIT 50
+        {limit_clause}
     """)
     global_transactions = cur.fetchall()
 
@@ -48,8 +51,19 @@ def dashboard():
         ORDER BY dr.created_at DESC
     """)
     deposit_requests = cur.fetchall()
+
+    # Get Pending Account Requests
+    cur.execute("""
+        SELECT request_id, username, email, first_name, last_name, created_at
+        FROM account_requests
+        WHERE status = 'pending'
+        ORDER BY created_at DESC
+    """)
+    account_requests = cur.fetchall()
     
-    return render_template('dashboard/admin.html', alerts=alerts, active_accounts=active_accounts, global_transactions=global_transactions, deposit_requests=deposit_requests)
+    return render_template('dashboard/admin.html', alerts=alerts, active_accounts=active_accounts, 
+                           global_transactions=global_transactions, deposit_requests=deposit_requests,
+                           account_requests=account_requests, txn_limit=txn_limit)
 
 @admin_bp.route('/toggle_lock/<int:user_id>', methods=['POST'])
 def toggle_lock(user_id):
@@ -100,11 +114,8 @@ def handle_deposit(request_id, action):
             req = cur.fetchone()
             if req:
                 acc_id, amount = req
-                # Add balance
                 cur.execute("UPDATE accounts SET balance = balance + %s WHERE account_id = %s", (amount, acc_id))
-                # Add transaction
                 cur.execute("INSERT INTO transactions (account_id, transaction_type, amount, description) VALUES (%s, 'deposit', %s, 'Approved Cash Deposit')", (acc_id, amount))
-                # Update status
                 cur.execute("UPDATE deposit_requests SET status = 'accepted' WHERE request_id = %s", (request_id,))
                 conn.commit()
                 flash("Deposit approved and processed.", "success")
@@ -115,6 +126,40 @@ def handle_deposit(request_id, action):
     except Exception as e:
         conn.rollback()
         flash(f"Error handling deposit: {str(e)}", "danger")
+    return redirect(url_for('admin.dashboard'))
+
+@admin_bp.route('/handle_account_request/<int:request_id>/<action>', methods=['POST'])
+def handle_account_request(request_id, action):
+    conn = get_db_conn()
+    cur = conn.cursor()
+    try:
+        if action == 'accept':
+            cur.execute("SELECT username, email, password_hash, first_name, last_name FROM account_requests WHERE request_id = %s AND status = 'pending'", (request_id,))
+            req = cur.fetchone()
+            if req:
+                username, email, password_hash, first_name, last_name = req
+                # Insert into users (role_id 1 = Customer)
+                cur.execute("INSERT INTO users (username, email, password_hash, role_id) VALUES (%s, %s, %s, 1) RETURNING user_id", (username, email, password_hash))
+                user_id = cur.fetchone()[0]
+                # Insert into customers
+                cur.execute("INSERT INTO customers (user_id, first_name, last_name) VALUES (%s, %s, %s) RETURNING customer_id", (user_id, first_name, last_name))
+                customer_id = cur.fetchone()[0]
+                # Create a default checking account
+                import random
+                acc_num = f"PK-BANK-{random.randint(1000, 9999)}"
+                cur.execute("INSERT INTO accounts (account_number, customer_id, account_type) VALUES (%s, %s, 'checking')", (acc_num, customer_id))
+                
+                # Update status
+                cur.execute("UPDATE account_requests SET status = 'accepted' WHERE request_id = %s", (request_id,))
+                conn.commit()
+                flash("Account request approved and user created.", "success")
+        elif action == 'reject':
+            cur.execute("UPDATE account_requests SET status = 'rejected' WHERE request_id = %s", (request_id,))
+            conn.commit()
+            flash("Account request rejected.", "info")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error handling account request: {str(e)}", "danger")
     return redirect(url_for('admin.dashboard'))
 
 @admin_bp.route('/backup/push', methods=['POST'])

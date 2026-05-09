@@ -29,14 +29,19 @@ JOIN customers c ON l.customer_id = c.customer_id
 WHERE l.maturity_date < CURRENT_DATE AND l.status = 'active';
 
 -- Open fraud alerts
-CREATE VIEW open_fraud_alerts_view AS
+CREATE OR REPLACE VIEW open_fraud_alerts_view AS
 SELECT 
     fa.alert_id,
     fa.alert_type,
     fa.severity,
     fa.created_at,
-    a.account_number
+    a.account_number,
+    t.description as recipient_info,
+    t.amount,
+    c.user_id
 FROM fraud_alerts fa
 JOIN accounts a ON fa.account_id = a.account_id
+JOIN customers c ON a.customer_id = c.customer_id
+LEFT JOIN transactions t ON fa.transaction_id = t.transaction_id
 WHERE fa.status = 'open'
 ORDER BY fa.created_at DESC;
