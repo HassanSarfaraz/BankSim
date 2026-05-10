@@ -29,6 +29,18 @@ UPDATE users
 SET profile_image = 'profile_pics/' || user_id || '.png'
 WHERE profile_image IS NULL;
 
+-- 1f. Support Tickets Table
+CREATE TABLE IF NOT EXISTS support_tickets (
+    ticket_id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
+    subject VARCHAR(200) NOT NULL,
+    message TEXT NOT NULL,
+    admin_reply TEXT,
+    status VARCHAR(20) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
 
 -- ─────────────────────────────────────────────────────────────
 -- 2. DROP VIEWS THAT DEPEND ON ALTERED COLUMNS
@@ -159,6 +171,17 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_balance_management
 AFTER INSERT OR UPDATE ON transactions
 FOR EACH ROW EXECUTE FUNCTION handle_transaction_balance();
+
+-- 4b. Intercept large transactions (Admin-Approved Cash Deposit Bypass)
+CREATE OR REPLACE FUNCTION intercept_large_transaction()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.amount >= 10000 AND NEW.description != 'Admin-Approved Cash Deposit' THEN
+        NEW.status := 'pending';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 
 -- ─────────────────────────────────────────────────────────────
