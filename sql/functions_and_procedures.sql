@@ -115,3 +115,47 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+
+
+-- 1. Update the function to set balance_after directly
+CREATE OR REPLACE FUNCTION handle_transaction_balance()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_new_balance DECIMAL(15,2);
+BEGIN
+    -- Process if status is 'completed'
+    IF (TG_OP = 'INSERT' AND NEW.status = 'completed') OR 
+       (TG_OP = 'UPDATE' AND OLD.status = 'pending' AND NEW.status = 'completed') THEN
+        
+        -- Update the account balance and get the NEW balance
+        IF NEW.transaction_type = 'deposit' THEN
+            UPDATE accounts SET balance = balance + NEW.amount
+            WHERE account_id = NEW.account_id
+            RETURNING balance INTO v_new_balance;
+        ELSIF NEW.transaction_type IN ('withdrawal', 'transfer', 'payment', 'fee') THEN
+            UPDATE accounts SET balance = balance - NEW.amount
+            WHERE account_id = NEW.account_id
+            RETURNING balance INTO v_new_balance;
+        END IF;
+        
+        -- Set the snapshot for this transaction row
+        NEW.balance_after := v_new_balance;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 2. Change it to a BEFORE trigger (much more reliable)
+DROP TRIGGER IF EXISTS trg_balance_management ON transactions;
+CREATE TRIGGER trg_balance_management
+BEFORE INSERT OR UPDATE ON transactions
+FOR EACH ROW EXECUTE FUNCTION handle_transaction_balance();
+
+
+
+-- This syncs the snapshot with the current account balance for the most recent transaction
+UPDATE transactions t
+SET balance_after = a.balance
+FROM accounts a
+WHERE t.account_id = a.account_id
+  AND t.balance_after IS NULL;

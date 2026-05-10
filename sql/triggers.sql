@@ -33,18 +33,14 @@ CREATE TRIGGER trg_intercept_large_txn
 BEFORE INSERT ON transactions
 FOR EACH ROW EXECUTE FUNCTION intercept_large_transaction();
 
--- 3. Unified Balance Management (Updates balance and captures snapshot)
+-- 3. Unified Balance Management (Updates balance and sets snapshot)
 CREATE OR REPLACE FUNCTION handle_transaction_balance()
 RETURNS TRIGGER AS $$
 DECLARE
     v_new_balance DECIMAL(15,2);
 BEGIN
-    -- Recursion protection
-    IF (pg_trigger_depth() > 1) THEN
-        RETURN NEW;
-    END IF;
-
     -- Process if status is 'completed'
+    -- (Either it's a new completed txn, or an update from pending to completed)
     IF (TG_OP = 'INSERT' AND NEW.status = 'completed') OR 
        (TG_OP = 'UPDATE' AND OLD.status = 'pending' AND NEW.status = 'completed') THEN
         
@@ -59,17 +55,17 @@ BEGIN
             RETURNING balance INTO v_new_balance;
         END IF;
         
-        -- 2. Update the transaction record snapshot
-        IF v_new_balance IS NOT NULL THEN
-            UPDATE transactions SET balance_after = v_new_balance WHERE transaction_id = NEW.transaction_id;
-        END IF;
+        -- 2. Set the balance_after for the current row (Directly in BEFORE trigger)
+        NEW.balance_after := v_new_balance;
     END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
+-- Use BEFORE trigger for reliable balance_after population
+DROP TRIGGER IF EXISTS trg_balance_management ON transactions;
 CREATE TRIGGER trg_balance_management
-AFTER INSERT OR UPDATE ON transactions
+BEFORE INSERT OR UPDATE ON transactions
 FOR EACH ROW EXECUTE FUNCTION handle_transaction_balance();
 
 -- 5. Auto-flag large transactions for compliance
