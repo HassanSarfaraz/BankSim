@@ -33,16 +33,19 @@ BEGIN
     WHERE account_id = p_from_account FOR UPDATE;
 
     IF v_balance < p_amount THEN
-        RAISE EXCEPTION 'Insufficient funds: balance is %, need %', v_balance, p_amount;
+        RAISE EXCEPTION 'Insufficient funds: balance is %', v_balance;
     END IF;
 
-    -- Debit sender (intercept trigger sets status=pending if amount >= 10000)
+    -- Debit
     INSERT INTO transactions(account_id, transaction_type, amount, description, transaction_date)
     VALUES (p_from_account, 'withdrawal', p_amount, p_description, NOW());
 
-    -- Credit receiver (also held pending if large)
+    -- Credit
     INSERT INTO transactions(account_id, transaction_type, amount, description, transaction_date)
     VALUES (p_to_account, 'deposit', p_amount, p_description, NOW());
+
+    -- Note: Procedures in PL/pgSQL can't have COMMIT if called within an atomic context, 
+    -- but here we assume it's the top-level call or handled by Flask.
 END;
 $$;
 
@@ -90,3 +93,25 @@ BEGIN
     CLOSE txn_cursor;
 END;
 $$;
+
+
+
+
+-- Fix the duplicate key bug: add ON CONFLICT DO NOTHING + recursion guard
+CREATE OR REPLACE FUNCTION flag_large_transaction()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Only run at depth 1 to prevent double-firing on partitioned tables
+    IF pg_trigger_depth() > 1 THEN
+        RETURN NEW;
+    END IF;
+
+    IF NEW.amount >= 10000 THEN
+        INSERT INTO fraud_alerts(transaction_id, account_id, alert_type, severity, status)
+        VALUES (NEW.transaction_id, NEW.account_id, 'large_transaction', 'high', 'open')
+        ON CONFLICT DO NOTHING;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+

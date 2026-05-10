@@ -46,7 +46,14 @@ def dashboard():
     cur.execute("SELECT previous_login, profile_image FROM users WHERE user_id = %s", (session['user_id'],))
     user_res = cur.fetchone()
     last_login = user_res[0] if user_res else None
-    profile_image = user_res[1] if user_res else None
+    raw_image = user_res[1] if user_res else None
+
+    # Only use profile_image if the file actually exists on disk
+    if raw_image:
+        image_path = os.path.join('app', 'static', raw_image)
+        profile_image = raw_image if os.path.exists(image_path) else None
+    else:
+        profile_image = None
 
     # Fetch support tickets
     cur.execute("SELECT ticket_id, subject, message, admin_reply, status, created_at, updated_at FROM support_tickets WHERE user_id = %s ORDER BY updated_at DESC", (session['user_id'],))
@@ -330,8 +337,15 @@ def submit_ticket():
             (session['user_id'], subject, message)
         )
         ticket_id = cur.fetchone()[0]
+
+        # Write to audit log so admin audit view reflects this action
+        cur.execute("""
+            INSERT INTO audit_log (user_id, action, table_name, record_id, new_value)
+            VALUES (%s, 'SUBMIT_TICKET', 'support_tickets', %s,
+                    jsonb_build_object('ticket_id', %s, 'subject', %s))
+        """, (session['user_id'], ticket_id, ticket_id, subject))
         conn.commit()
-        
+
         push_record('support_tickets', ticket_id, {
             'ticket_id': str(ticket_id),
             'user_id': str(session['user_id']),

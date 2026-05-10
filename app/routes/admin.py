@@ -18,14 +18,16 @@ def dashboard():
     cur = conn.cursor()
 
     # ── Fraud Alerts (large/suspicious transactions awaiting approval) ──────────
-    # Only show alerts for transactions that are PENDING (need approval)
+    # INNER JOIN ensures we only show alerts that have a real linked transaction
     cur.execute("""
         SELECT fa.alert_id, fa.alert_type, fa.severity, fa.created_at,
-               a.account_number, t.description, t.amount, c.user_id, t.transaction_id, t.status
+               a.account_number, t.description,
+               t.amount,
+               c.user_id, t.transaction_id, t.status
         FROM fraud_alerts fa
         JOIN accounts a ON fa.account_id = a.account_id
         JOIN customers c ON a.customer_id = c.customer_id
-        LEFT JOIN transactions t ON fa.transaction_id = t.transaction_id
+        INNER JOIN transactions t ON fa.transaction_id = t.transaction_id
         WHERE fa.status = 'open'
         ORDER BY fa.created_at DESC
     """)
@@ -461,18 +463,30 @@ def handle_account_request(request_id, action):
                 )
                 customer_id = cur.fetchone()[0]
                 import random
-                acc_num = f"PK-BANK-{random.randint(10000, 99999)}"
+                acc_num = f"PK99-BANK-{random.randint(10000, 99999)}"
                 cur.execute(
                     "INSERT INTO accounts (account_number, customer_id, account_type) VALUES (%s, %s, 'checking')",
                     (acc_num, customer_id)
                 )
                 cur.execute("UPDATE account_requests SET status = 'accepted' WHERE request_id = %s", (request_id,))
+                # Write to audit log
+                cur.execute("""
+                    INSERT INTO audit_log (user_id, action, table_name, record_id, new_value)
+                    VALUES (%s, 'APPROVE_ACCOUNT', 'account_requests', %s,
+                            jsonb_build_object('username', %s, 'status', 'accepted'))
+                """, (session['user_id'], request_id, username))
                 conn.commit()
                 push_record('users', user_id, {'user_id': user_id, 'username': username, 'email': email, 'role_id': 1})
                 push_record('account_requests', request_id, {'request_id': request_id, 'status': 'accepted'})
                 flash("Account approved. User can now log in.", "success")
         elif action == 'reject':
             cur.execute("UPDATE account_requests SET status = 'rejected' WHERE request_id = %s", (request_id,))
+            # Write to audit log
+            cur.execute("""
+                INSERT INTO audit_log (user_id, action, table_name, record_id, new_value)
+                VALUES (%s, 'REJECT_ACCOUNT', 'account_requests', %s,
+                        jsonb_build_object('request_id', %s, 'status', 'rejected'))
+            """, (session['user_id'], request_id, request_id))
             conn.commit()
             push_record('account_requests', request_id, {'request_id': request_id, 'status': 'rejected'})
             flash("Account request rejected.", "info")

@@ -76,9 +76,16 @@ FOR EACH ROW EXECUTE FUNCTION handle_transaction_balance();
 CREATE OR REPLACE FUNCTION flag_large_transaction()
 RETURNS TRIGGER AS $$
 BEGIN
+    -- Only run at trigger depth 1 to prevent double-firing on partitioned tables
+    IF pg_trigger_depth() > 1 THEN
+        RETURN NEW;
+    END IF;
+
     IF NEW.amount >= 10000 THEN
+        -- ON CONFLICT DO NOTHING prevents duplicate key errors if trigger fires twice
         INSERT INTO fraud_alerts(transaction_id, account_id, alert_type, severity, status)
-        VALUES (NEW.transaction_id, NEW.account_id, 'large_transaction', 'high', 'open');
+        VALUES (NEW.transaction_id, NEW.account_id, 'large_transaction', 'high', 'open')
+        ON CONFLICT DO NOTHING;
     END IF;
     RETURN NEW;
 END;

@@ -13,7 +13,7 @@ SELECT
     u.user_id,
     u.last_login,
     u.profile_image,
-    (SELECT attempt_time FROM login_attempts WHERE user_id = u.user_id AND success = TRUE ORDER BY attempt_time DESC OFFSET 1 LIMIT 1) AS previous_login,
+    u.previous_login,
     c.kyc_status,
     c.credit_score,
     a.interest_rate,
