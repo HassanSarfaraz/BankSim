@@ -89,6 +89,16 @@ def dashboard():
     """)
     pending_sub_accounts = cur.fetchall()
 
+    # ── Pending Support Tickets ─────────────────────────────────────────────────
+    cur.execute("""
+        SELECT t.ticket_id, u.username, t.subject, t.message, t.created_at
+        FROM support_tickets t
+        JOIN users u ON t.user_id = u.user_id
+        WHERE t.status = 'pending'
+        ORDER BY t.created_at ASC
+    """)
+    support_tickets = cur.fetchall()
+
     return render_template(
         'dashboard/admin.html',
         alerts=alerts,
@@ -97,11 +107,125 @@ def dashboard():
         deposit_requests=deposit_requests,
         account_requests=account_requests,
         pending_sub_accounts=pending_sub_accounts,
+        support_tickets=support_tickets,
         audit_logs=audit_logs,
         txn_limit=txn_limit
     )
 
 
+@admin_bp.route('/edit_customer/<int:customer_id>', methods=['GET', 'POST'])
+def edit_customer(customer_id):
+    if _require_admin():
+        return redirect(url_for('auth.login'))
+        
+    conn = get_db_conn()
+    cur = conn.cursor()
+    
+    if request.method == 'POST':
+        # Retrieve form data, converting empty strings to None
+        first_name = request.form.get('first_name')
+        last_name = request.form.get('last_name')
+        date_of_birth = request.form.get('date_of_birth') or None
+        phone = request.form.get('phone') or None
+        city = request.form.get('city') or None
+        country = request.form.get('country') or None
+        kyc_status = request.form.get('kyc_status')
+        credit_score = request.form.get('credit_score')
+        
+        try:
+            # Update the customer record
+            cur.execute("""
+                UPDATE customers 
+                SET first_name = %s, last_name = %s, date_of_birth = %s, phone = %s, 
+                    city = %s, country = %s, kyc_status = %s, credit_score = %s
+                WHERE customer_id = %s
+            """, (first_name, last_name, date_of_birth, phone, city, country, kyc_status, credit_score, customer_id))
+            conn.commit()
+            
+            # Push changes to Firebase
+            push_record('customers', customer_id, {
+                'customer_id': str(customer_id),
+                'first_name': first_name,
+                'last_name': last_name,
+                'date_of_birth': date_of_birth,
+                'phone': phone,
+                'city': city,
+                'country': country,
+                'kyc_status': kyc_status,
+                'credit_score': credit_score
+            })
+            
+            flash("Customer details updated successfully.", "success")
+            return redirect(url_for('admin.dashboard'))
+        except Exception as e:
+            conn.rollback()
+            flash(f"Error updating customer: {str(e)}", "danger")
+            
+    # GET request: load current customer details
+    cur.execute("""
+        SELECT customer_id, first_name, last_name, date_of_birth, phone, city, country, kyc_status, credit_score
+        FROM customers
+        WHERE customer_id = %s
+    """, (customer_id,))
+    customer = cur.fetchone()
+    
+    if not customer:
+        flash("Customer not found.", "danger")
+        return redirect(url_for('admin.dashboard'))
+        
+    return render_template('dashboard/admin_customer_edit.html', customer=customer)
+
+
+@admin_bp.route('/resolve_ticket/<int:ticket_id>', methods=['POST'])
+def resolve_ticket(ticket_id):
+    if _require_admin():
+        return redirect(url_for('auth.login'))
+        
+    admin_reply = request.form.get('admin_reply')
+    if not admin_reply:
+        flash("Reply message is required.", "warning")
+        return redirect(url_for('admin.dashboard'))
+        
+    conn = get_db_conn()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE support_tickets 
+            SET admin_reply = %s, status = 'resolved', updated_at = NOW()
+            WHERE ticket_id = %s
+            RETURNING user_id, subject, message
+        """, (admin_reply, ticket_id))
+        res = cur.fetchone()
+        conn.commit()
+        
+        if res:
+            # Push to Firebase
+            push_record('support_tickets', ticket_id, {
+                'ticket_id': str(ticket_id),
+                'user_id': str(res[0]),
+                'subject': res[1],
+                'message': res[2],
+                'admin_reply': admin_reply,
+                'status': 'resolved'
+            })
+            
+            # Write to audit_log
+            cur.execute("""
+                INSERT INTO audit_log (user_id, action, table_name, record_id, new_value)
+                VALUES (%s, 'RESOLVE_TICKET', 'support_tickets', %s,
+                        jsonb_build_object('ticket_id', %s, 'status', 'resolved'))
+            """, (session['user_id'], ticket_id, ticket_id))
+            conn.commit()
+            
+            flash("Ticket resolved successfully.", "success")
+        else:
+            flash("Ticket not found.", "warning")
+            
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error resolving ticket: {str(e)}", "danger")
+        
+    return redirect(url_for('admin.dashboard'))
 @admin_bp.route('/toggle_lock/<int:user_id>', methods=['POST'])
 def toggle_lock(user_id):
     if _require_admin():
@@ -251,21 +375,59 @@ def handle_deposit(request_id, action):
             if req:
                 acc_id, amount = req
                 # Insert completed transaction — trigger updates balance automatically.
-                # Do NOT add a separate UPDATE accounts here — that would double the balance.
                 cur.execute(
                     "INSERT INTO transactions (account_id, transaction_type, amount, description, status) "
                     "VALUES (%s, 'deposit', %s, 'Admin-Approved Cash Deposit', 'completed')",
                     (acc_id, amount)
                 )
                 cur.execute("UPDATE deposit_requests SET status = 'accepted' WHERE request_id = %s", (request_id,))
+
+                # ── Write to audit_log so it appears in admin audit section ──────
+                cur.execute("""
+                    INSERT INTO audit_log (user_id, action, table_name, record_id, new_value)
+                    VALUES (%s, 'ACCEPT_DEPOSIT', 'deposit_requests', %s,
+                            jsonb_build_object('request_id', %s, 'amount', %s, 'status', 'accepted'))
+                """, (session['user_id'], request_id, request_id, str(amount)))
+
                 conn.commit()
-                push_record('deposit_requests', request_id, {'request_id': request_id, 'status': 'accepted'})
+                # Push full record so Firebase is authoritative and won't revert on next login
+                push_record('deposit_requests', request_id, {
+                    'request_id': str(request_id),
+                    'account_id': str(acc_id),
+                    'amount': str(amount),
+                    'status': 'accepted'
+                })
                 flash("Deposit approved and processed.", "success")
+            else:
+                flash("Deposit request not found or already processed.", "warning")
+
         elif action == 'reject':
+            cur.execute(
+                "SELECT account_id, amount FROM deposit_requests WHERE request_id = %s",
+                (request_id,)
+            )
+            req = cur.fetchone()
+            acc_id = req[0] if req else None
+            amount = req[1] if req else 0
+
             cur.execute("UPDATE deposit_requests SET status = 'rejected' WHERE request_id = %s", (request_id,))
+
+            # ── Write to audit_log ───────────────────────────────────────────────
+            cur.execute("""
+                INSERT INTO audit_log (user_id, action, table_name, record_id, new_value)
+                VALUES (%s, 'REJECT_DEPOSIT', 'deposit_requests', %s,
+                        jsonb_build_object('request_id', %s, 'status', 'rejected'))
+            """, (session['user_id'], request_id, request_id))
+
             conn.commit()
-            push_record('deposit_requests', request_id, {'request_id': request_id, 'status': 'rejected'})
+            push_record('deposit_requests', request_id, {
+                'request_id': str(request_id),
+                'account_id': str(acc_id) if acc_id else None,
+                'amount': str(amount),
+                'status': 'rejected'
+            })
             flash("Deposit request rejected.", "info")
+
     except Exception as e:
         conn.rollback()
         flash(f"Error: {str(e)}", "danger")
@@ -281,21 +443,21 @@ def handle_account_request(request_id, action):
     try:
         if action == 'accept':
             cur.execute(
-                "SELECT username, email, password_hash, first_name, last_name FROM account_requests "
+                "SELECT username, email, password_hash, first_name, last_name, date_of_birth, phone, city, country FROM account_requests "
                 "WHERE request_id = %s AND status = 'pending'",
                 (request_id,)
             )
             req = cur.fetchone()
             if req:
-                username, email, password_hash, first_name, last_name = req
+                username, email, password_hash, first_name, last_name, date_of_birth, phone, city, country = req
                 cur.execute(
                     "INSERT INTO users (username, email, password_hash, role_id) VALUES (%s, %s, %s, 1) RETURNING user_id",
                     (username, email, password_hash)
                 )
                 user_id = cur.fetchone()[0]
                 cur.execute(
-                    "INSERT INTO customers (user_id, first_name, last_name) VALUES (%s, %s, %s) RETURNING customer_id",
-                    (user_id, first_name, last_name)
+                    "INSERT INTO customers (user_id, first_name, last_name, date_of_birth, phone, city, country) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING customer_id",
+                    (user_id, first_name, last_name, date_of_birth, phone, city, country)
                 )
                 customer_id = cur.fetchone()[0]
                 import random

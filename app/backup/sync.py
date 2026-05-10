@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # IMPORTANT: transactions is PARTITIONED — sync the child tables directly, NOT the parent.
 # Syncing the parent would cause every row to appear in all children on restore.
 SYNC_TABLES = ['users', 'customers', 'accounts', 'transactions_2025', 'transactions_2026',
-               'loans', 'deposit_requests', 'account_requests', 'fraud_alerts']
+               'loans', 'deposit_requests', 'account_requests', 'fraud_alerts', 'support_tickets']
 
 # Primary key for each table
 TABLE_PKS = {
@@ -33,6 +33,7 @@ TABLE_PKS = {
     'deposit_requests': 'request_id',
     'account_requests': 'request_id',
     'fraud_alerts': 'alert_id',
+    'support_tickets': 'ticket_id',
 }
 
 # Columns that MUST not be null/overwritten blindly from Firebase
@@ -167,3 +168,137 @@ def firebase_to_postgres():
     conn.commit()
 
     return {"status": "success", "restored": restore_results}
+
+
+# ─── PER-USER SYNC (used on login / logout) ───────────────────────────────────
+
+# Tables whose rows are owned by / related to a single user_id.
+# Each entry: (table_name, pk_col, user_filter_sql)
+# The filter must produce a WHERE clause fragment that accepts (user_id,) as param.
+_USER_TABLES = [
+    # (table,               pk,               join/where to reach user_id)
+    ('users',           'user_id',   'WHERE user_id = %s'),
+    ('customers',       'customer_id', 'WHERE user_id = %s'),
+    # accounts & transactions are reached via customer_id → user_id
+    ('accounts',        'account_id',
+     'WHERE customer_id IN (SELECT customer_id FROM customers WHERE user_id = %s)'),
+    ('transactions_2026', 'transaction_id',
+     'WHERE account_id IN (SELECT a.account_id FROM accounts a JOIN customers c ON a.customer_id=c.customer_id WHERE c.user_id=%s)'),
+    ('transactions_2025', 'transaction_id',
+     'WHERE account_id IN (SELECT a.account_id FROM accounts a JOIN customers c ON a.customer_id=c.customer_id WHERE c.user_id=%s)'),
+    ('deposit_requests', 'request_id',
+     'WHERE account_id IN (SELECT a.account_id FROM accounts a JOIN customers c ON a.customer_id=c.customer_id WHERE c.user_id=%s)'),
+    ('loans',           'loan_id',
+     'WHERE customer_id IN (SELECT customer_id FROM customers WHERE user_id=%s)'),
+    ('support_tickets', 'ticket_id', 'WHERE user_id = %s'),
+]
+
+
+def firebase_to_postgres_for_user(user_id):
+    """
+    PULL: Firebase → Postgres for one user (called on login).
+    Only inserts records that are genuinely missing from local DB.
+    Local state is always authoritative — we never overwrite existing rows.
+    Returns {'added': N} where N is the number of new rows inserted.
+    """
+    if firestore.db_firestore is None:
+        return {"added": 0, "message": "Firebase not initialized"}
+
+    conn = get_db_conn()
+    cur = conn.cursor()
+    # Check if admin (role_id=3)
+    cur.execute("SELECT role_id FROM users WHERE user_id = %s", (user_id,))
+    res = cur.fetchone()
+    if res and res[0] == 3:
+        return {"added": 0, "message": "Admin user: sync skipped"}
+
+    cur.execute("SET session_replication_role = 'replica';")
+
+    total_added = 0
+
+    for table, pk, _where_sql in _USER_TABLES:
+        try:
+            # ── Collect ALL existing PKs in the full table ────────────────────────
+            # CRITICAL: do NOT filter by user ownership here.
+            # Admin users have no customer record, so a user-filtered query returns
+            # empty set — making every Firebase doc look "missing" and causing
+            # stale 'pending' records to be re-inserted on every admin login.
+            cur.execute(f'SELECT "{pk}" FROM {table}')
+            local_pks = {str(r[0]) for r in cur.fetchall()}
+
+            # Get DB column list
+            cur.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = %s",
+                (table,)
+            )
+            db_cols = [r[0] for r in cur.fetchall()]
+
+            # Stream Firebase — skip anything that already exists locally
+            docs = firestore.db_firestore.collection(table).stream()
+            for doc in docs:
+                if doc.id in local_pks:
+                    continue  # Already in local DB — local state wins, never overwrite
+
+                data = doc.to_dict()
+                row = _deserialize_row(data, db_cols)
+                if not row:
+                    continue
+
+                columns = list(row.keys())
+                values = list(row.values())
+                placeholders = ", ".join(["%s"] * len(values))
+                query = (
+                    f'INSERT INTO {table} ({", ".join([f"{chr(34)}{c}{chr(34)}" for c in columns])})'
+                    f' VALUES ({placeholders})'
+                    f' ON CONFLICT ("{pk}") DO NOTHING'
+                )
+                try:
+                    cur.execute(query, values)
+                    total_added += 1
+                except Exception as row_err:
+                    conn.rollback()
+                    logger.warning(f"Skipping Firebase row {table}/{doc.id}: {row_err}")
+                    cur.execute("SET session_replication_role = 'replica';")
+
+        except Exception as e:
+            logger.error(f"firebase_to_postgres_for_user error on {table}: {e}")
+
+    cur.execute("SET session_replication_role = 'origin';")
+    conn.commit()
+    return {"added": total_added}
+
+
+def postgres_to_firebase_for_user(user_id):
+    """
+    PUSH: Postgres → Firebase for one user (called on logout).
+    Uploads all rows belonging to this user to Firestore.
+    """
+    if firestore.db_firestore is None:
+        return {"status": "error", "message": "Firebase not initialized"}
+
+    conn = get_db_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    BATCH_SIZE = 400
+    sync_results = {}
+
+    for table, pk, where_sql in _USER_TABLES:
+        try:
+            cur.execute(f"SELECT * FROM {table} {where_sql}", (user_id,))
+            rows = cur.fetchall()
+            col_ref = firestore.db_firestore.collection(table)
+
+            for i in range(0, len(rows), BATCH_SIZE):
+                batch = firestore.db_firestore.batch()
+                for row in rows[i:i + BATCH_SIZE]:
+                    doc_id = str(row[pk])
+                    doc_data = {k: _serialize(v) for k, v in row.items()}
+                    batch.set(col_ref.document(doc_id), doc_data, merge=True)
+                batch.commit()
+
+            sync_results[table] = len(rows)
+        except Exception as e:
+            logger.error(f"postgres_to_firebase_for_user error on {table}: {e}")
+            sync_results[table] = f"error: {e}"
+
+    return {"status": "success", "synced": sync_results}

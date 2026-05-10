@@ -166,6 +166,54 @@
                 <button type="submit" class="btn" style="width: 100%; border: 1px solid var(--accent); color: var(--accent);">Update Picture</button>
             </form>
         </div>
+
+        <!-- Support Tickets -->
+        <div class="glass card" style="margin-top: 2rem;">
+            <h3>Support & Queries</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">Ask the admin a question or report an issue.</p>
+            
+            <form action="{{ url_for('customer.submit_ticket') }}" method="POST" style="margin-bottom: 2rem;">
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.8rem; color: var(--text-muted);">Subject</label>
+                    <input type="text" name="subject" class="glass" style="width: 100%; padding: 0.5rem; color: white;" placeholder="Brief topic" required>
+                </div>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.8rem; color: var(--text-muted);">Message</label>
+                    <textarea name="message" class="glass" style="width: 100%; padding: 0.5rem; color: white; min-height: 80px;" placeholder="Describe your issue..." required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Submit Ticket</button>
+            </form>
+
+            <h4 style="margin-top: 1rem; color: var(--text-muted);">My Tickets</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Status</th>
+                        <th>Admin Reply</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in tickets %}
+                    <tr>
+                        <td><strong>{{ t[1] }}</strong><br><small style="color:var(--text-muted)">{{ t[5].strftime('%Y-%m-%d %H:%M') }}</small></td>
+                        <td>
+                            <span style="font-size:0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px;
+                                background: {% if t[4] == 'resolved' %}rgba(16,185,129,0.15){% else %}rgba(234,179,8,0.15){% endif %};
+                                color: {% if t[4] == 'resolved' %}#10b981{% else %}#eab308{% endif %};">
+                                {{ t[4] }}
+                            </span>
+                        </td>
+                        <td style="font-size: 0.9rem; max-width: 200px;">
+                            {{ t[3] or 'Waiting for reply...' }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3" style="text-align:center; color:var(--text-muted)">No support tickets found</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endblock %}

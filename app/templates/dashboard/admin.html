@@ -180,6 +180,40 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Pending Support Tickets -->
+        <div class="glass card" style="grid-column: span 2;">
+            <h3>Pending Support Tickets</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Customer</th>
+                        <th>Subject</th>
+                        <th>Message</th>
+                        <th>Date</th>
+                        <th>Reply & Resolve</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in support_tickets %}
+                    <tr>
+                        <td><strong>{{ t[1] }}</strong></td>
+                        <td>{{ t[2] }}</td>
+                        <td style="max-width: 250px; font-size: 0.85rem; color: var(--text-muted);">{{ t[3] }}</td>
+                        <td style="font-size: 0.85rem;">{{ t[4].strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>
+                            <form action="{{ url_for('admin.resolve_ticket', ticket_id=t[0]) }}" method="POST" style="display: flex; gap: 0.5rem; align-items: stretch;">
+                                <input type="text" name="admin_reply" class="glass" style="flex: 1; padding: 0.3rem 0.5rem; color: white; border: 1px solid var(--glass-border);" placeholder="Type reply here..." required>
+                                <button type="submit" class="btn btn-primary" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; white-space: nowrap;">Resolve</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" style="text-align:center; color:var(--text-muted)">No pending support tickets</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <!-- Active Accounts Overview -->
@@ -234,11 +268,16 @@
                         {{ acc[10].strftime('%d/%m %H:%M') if acc[10] else 'Never' }}
                     </td>
                     <td>
-                        <form action="{{ url_for('admin.toggle_lock', user_id=acc[7]) }}" method="POST">
-                            <button type="submit" class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; border: 1px solid {% if acc[6] %}#ef4444{% else %}var(--primary){% endif %}; color: {% if acc[6] %}#ef4444{% else %}var(--primary){% endif %};">
-                                {% if acc[6] %}Lock{% else %}Unlock{% endif %}
-                            </button>
-                        </form>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <form action="{{ url_for('admin.toggle_lock', user_id=acc[7]) }}" method="POST" style="margin: 0;">
+                                <button type="submit" class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; border: 1px solid {% if acc[6] %}#ef4444{% else %}var(--primary){% endif %}; color: {% if acc[6] %}#ef4444{% else %}var(--primary){% endif %};">
+                                    {% if acc[6] %}Lock{% else %}Unlock{% endif %}
+                                </button>
+                            </form>
+                            <a href="{{ url_for('admin.edit_customer', customer_id=acc[0]) }}" class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; border: 1px solid var(--text-muted); color: var(--text-muted); text-decoration: none;">
+                                Edit
+                            </a>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}

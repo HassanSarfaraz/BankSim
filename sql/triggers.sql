@@ -22,7 +22,7 @@ FOR EACH ROW EXECUTE FUNCTION check_login_attempts();
 CREATE OR REPLACE FUNCTION intercept_large_transaction()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF NEW.amount >= 10000 THEN
+    IF NEW.amount >= 10000 AND NEW.description != 'Admin-Approved Cash Deposit' THEN
         NEW.status := 'pending';
     END IF;
     RETURN NEW;

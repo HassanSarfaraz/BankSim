@@ -15,8 +15,8 @@ CREATE TABLE users (
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW(),
     last_login TIMESTAMP,
-    previous_login TIMESTAMP,
-    profile_image VARCHAR(255)
+    previous_login TIMESTAMP,          -- tracks the session before current
+    profile_image VARCHAR(255)         -- stores relative path e.g. profile_pics/1.png
 );
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_role ON users(role_id);
@@ -41,7 +41,7 @@ CREATE TABLE accounts (
     account_id BIGSERIAL PRIMARY KEY,
     account_number VARCHAR(20) UNIQUE NOT NULL,
     customer_id BIGINT REFERENCES customers(customer_id),
-    account_type VARCHAR(20) CHECK (account_type IN ('checking','savings','credit','loan','business')),
+    account_type VARCHAR(20) CHECK (account_type IN ('checking','savings','credit','loan','business')), -- 'business' added
     balance DECIMAL(15,2) DEFAULT 0.00,
     currency VARCHAR(3) DEFAULT 'USD',
     status VARCHAR(20) DEFAULT 'active',
@@ -147,6 +147,22 @@ CREATE TABLE account_requests (
     password_hash VARCHAR(255) NOT NULL,
     first_name VARCHAR(100),
     last_name VARCHAR(100),
+    date_of_birth DATE,
+    phone VARCHAR(20),
+    city VARCHAR(100),
+    country VARCHAR(100),
     status VARCHAR(20) DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 13. SUPPORT TICKETS
+CREATE TABLE support_tickets (
+    ticket_id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
+    subject VARCHAR(200) NOT NULL,
+    message TEXT NOT NULL,
+    admin_reply TEXT,
+    status VARCHAR(20) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );

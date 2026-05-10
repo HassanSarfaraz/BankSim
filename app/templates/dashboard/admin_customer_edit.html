@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 50px auto;" class="glass animate-fade-in">
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <h2 style="margin-top: 0; color: var(--primary);">Edit Customer Details</h2>
+            <a href="{{ url_for('admin.dashboard') }}" class="btn" style="border: 1px solid var(--text-muted); color: var(--text-muted); text-decoration: none;">Back</a>
+        </div>
+        
+        <form method="POST" action="{{ url_for('admin.edit_customer', customer_id=customer[0]) }}">
+            <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">First Name</label>
+                    <input type="text" name="first_name" value="{{ customer[1] or '' }}" class="glass" style="width: 100%; padding: 0.75rem; border: 1px solid var(--glass-border); color: white; box-sizing: border-box;" required>
+                </div>
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">Last Name</label>
+                    <input type="text" name="last_name" value="{{ customer[2] or '' }}" class="glass" style="width: 100%; padding: 0.75rem; border: 1px solid var(--glass-border); color: white; box-sizing: border-box;" required>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">Date of Birth</label>
+                    <input type="date" name="date_of_birth" value="{{ customer[3].strftime('%Y-%m-%d') if customer[3] else '' }}" class="glass" style="width: 100%; padding: 0.75rem; border: 1px solid var(--glass-border); color: white; box-sizing: border-box;">
+                </div>
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">Phone Number</label>
+                    <input type="tel" name="phone" value="{{ customer[4] or '' }}" class="glass" style="width: 100%; padding: 0.75rem; border: 1px solid var(--glass-border); color: white; box-sizing: border-box;">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">City</label>
+                    <input type="text" name="city" value="{{ customer[5] or '' }}" class="glass" style="width: 100%; padding: 0.75rem; border: 1px solid var(--glass-border); color: white; box-sizing: border-box;">
+                </div>
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">Country</label>
+                    <input type="text" name="country" value="{{ customer[6] or '' }}" class="glass" style="width: 100%; padding: 0.75rem; border: 1px solid var(--glass-border); color: white; box-sizing: border-box;">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 1rem; margin-bottom: 2rem;">
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">KYC Status</label>
+                    <select name="kyc_status" class="glass" style="width: 100%; padding: 0.75rem; border: 1px solid var(--glass-border); color: white; box-sizing: border-box; background: var(--bg-dark);">
+                        <option value="pending" {% if customer[7] == 'pending' %}selected{% endif %}>Pending</option>
+                        <option value="verified" {% if customer[7] == 'verified' %}selected{% endif %}>Verified</option>
+                        <option value="rejected" {% if customer[7] == 'rejected' %}selected{% endif %}>Rejected</option>
+                    </select>
+                </div>
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">Credit Score</label>
+                    <input type="number" name="credit_score" value="{{ customer[8] or 600 }}" min="300" max="850" class="glass" style="width: 100%; padding: 0.75rem; border: 1px solid var(--glass-border); color: white; box-sizing: border-box;">
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Save Changes</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

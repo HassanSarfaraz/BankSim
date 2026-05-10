@@ -48,11 +48,16 @@ def dashboard():
     last_login = user_res[0] if user_res else None
     profile_image = user_res[1] if user_res else None
 
+    # Fetch support tickets
+    cur.execute("SELECT ticket_id, subject, message, admin_reply, status, created_at, updated_at FROM support_tickets WHERE user_id = %s ORDER BY updated_at DESC", (session['user_id'],))
+    tickets = cur.fetchall()
+
     return render_template('dashboard/customer.html', 
                          accounts=accounts, 
                          transactions=transactions, 
                          last_login=last_login,
-                         profile_image=profile_image)
+                         profile_image=profile_image,
+                         tickets=tickets)
 
 
 @customer_bp.route('/transfer', methods=['POST'])
@@ -303,4 +308,40 @@ def open_account():
         conn.rollback()
         flash(f"Error opening account: {str(e)}", "danger")
 
+    return redirect(url_for('customer.dashboard'))
+
+@customer_bp.route('/submit_ticket', methods=['POST'])
+def submit_ticket():
+    if _check_login():
+        return redirect(url_for('auth.login'))
+        
+    subject = request.form.get('subject')
+    message = request.form.get('message')
+    
+    if not subject or not message:
+        flash("Subject and message are required.", "warning")
+        return redirect(url_for('customer.dashboard'))
+        
+    conn = get_db_conn()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "INSERT INTO support_tickets (user_id, subject, message) VALUES (%s, %s, %s) RETURNING ticket_id",
+            (session['user_id'], subject, message)
+        )
+        ticket_id = cur.fetchone()[0]
+        conn.commit()
+        
+        push_record('support_tickets', ticket_id, {
+            'ticket_id': str(ticket_id),
+            'user_id': str(session['user_id']),
+            'subject': subject,
+            'message': message,
+            'status': 'pending'
+        })
+        flash("Support ticket submitted successfully. Admin will reply soon.", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error submitting ticket: {str(e)}", "danger")
+        
     return redirect(url_for('customer.dashboard'))
