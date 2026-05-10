@@ -59,12 +59,96 @@ def dashboard():
     cur.execute("SELECT ticket_id, subject, message, admin_reply, status, created_at, updated_at FROM support_tickets WHERE user_id = %s ORDER BY updated_at DESC", (session['user_id'],))
     tickets = cur.fetchall()
 
+    # Fetch loans
+    cur.execute("""
+        SELECT loan_id, loan_type, principal_amount, interest_rate, tenure_months, emi, outstanding_balance, status, disbursement_date
+        FROM loans l
+        JOIN customers c ON l.customer_id = c.customer_id
+        WHERE c.user_id = %s
+        ORDER BY disbursement_date DESC NULLS FIRST
+    """, (session['user_id'],))
+    loans = cur.fetchall()
+
     return render_template('dashboard/customer.html', 
                          accounts=accounts, 
                          transactions=transactions, 
                          last_login=last_login,
                          profile_image=profile_image,
-                         tickets=tickets)
+                         tickets=tickets,
+                         loans=loans)
+
+
+@customer_bp.route('/apply_loan', methods=['POST'])
+def apply_loan():
+    if _check_login():
+        return redirect(url_for('auth.login'))
+
+    loan_type = request.form.get('loan_type', 'personal').strip()
+    amount_str = request.form.get('amount', '0').strip()
+    tenure_str = request.form.get('tenure', '12').strip()
+
+    try:
+        amount = float(amount_str)
+        tenure = int(tenure_str)
+        if amount <= 0 or tenure <= 0:
+            flash("Amount and tenure must be positive.", "warning")
+            return redirect(url_for('customer.dashboard'))
+    except (ValueError, TypeError):
+        flash("Invalid amount or tenure.", "danger")
+        return redirect(url_for('customer.dashboard'))
+
+    conn = get_db_conn()
+    cur = conn.cursor()
+    try:
+        # Get customer_id
+        cur.execute("SELECT customer_id FROM customers WHERE user_id = %s", (session['user_id'],))
+        c_res = cur.fetchone()
+        if not c_res:
+            flash("Customer profile not found.", "danger")
+            return redirect(url_for('customer.dashboard'))
+        customer_id = c_res[0]
+
+        # Define interest rate based on loan type
+        rates = {'personal': 0.12, 'home': 0.08, 'car': 0.10, 'education': 0.07}
+        rate = rates.get(loan_type, 0.12)
+
+        # Use SQL function calculate_emi to get monthly payment
+        cur.execute("SELECT calculate_emi(%s, %s, %s)", (amount, rate, tenure))
+        emi = cur.fetchone()[0]
+
+        # Insert loan request
+        cur.execute("""
+            INSERT INTO loans (customer_id, loan_type, principal_amount, interest_rate, tenure_months, emi, outstanding_balance, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending')
+            RETURNING loan_id
+        """, (customer_id, loan_type, amount, rate, tenure, emi, amount))
+        loan_id = cur.fetchone()[0]
+
+        # Audit Log
+        cur.execute("""
+            INSERT INTO audit_log (user_id, action, table_name, record_id, new_value)
+            VALUES (%s, 'APPLY_LOAN', 'loans', %s,
+                    jsonb_build_object('loan_type', %s, 'amount', %s, 'status', 'pending'))
+        """, (session['user_id'], loan_id, loan_type, amount))
+        
+        conn.commit()
+
+        # Push to Firebase
+        push_record('loans', loan_id, {
+            'loan_id': str(loan_id),
+            'customer_id': str(customer_id),
+            'loan_type': loan_type,
+            'amount': str(amount),
+            'emi': str(emi),
+            'status': 'pending'
+        })
+
+        flash(f"{loan_type.capitalize()} loan application submitted! Awaiting admin approval.", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error applying for loan: {str(e)}", "danger")
+
+    return redirect(url_for('customer.dashboard'))
 
 
 @customer_bp.route('/transfer', methods=['POST'])

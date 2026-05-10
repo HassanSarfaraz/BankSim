@@ -101,6 +101,17 @@ def dashboard():
     """)
     support_tickets = cur.fetchall()
 
+    # ── Pending Loan Applications ───────────────────────────────────────────────
+    cur.execute("""
+        SELECT l.loan_id, c.first_name || ' ' || c.last_name, l.loan_type,
+               l.principal_amount, l.interest_rate, l.tenure_months, l.emi, l.status
+        FROM loans l
+        JOIN customers c ON l.customer_id = c.customer_id
+        WHERE l.status = 'pending'
+        ORDER BY l.loan_id ASC
+    """)
+    pending_loans = cur.fetchall()
+
     return render_template(
         'dashboard/admin.html',
         alerts=alerts,
@@ -111,8 +122,60 @@ def dashboard():
         pending_sub_accounts=pending_sub_accounts,
         support_tickets=support_tickets,
         audit_logs=audit_logs,
-        txn_limit=txn_limit
+        txn_limit=txn_limit,
+        pending_loans=pending_loans
     )
+
+
+@admin_bp.route('/handle_loan/<int:loan_id>/<action>', methods=['POST'])
+def handle_loan(loan_id, action):
+    if _require_admin():
+        return redirect(url_for('auth.login'))
+
+    conn = get_db_conn()
+    cur = conn.cursor()
+    try:
+        new_status = 'active' if action == 'approve' else 'rejected'
+        
+        # Get customer data for auditing
+        cur.execute("""
+            SELECT c.user_id, l.principal_amount, l.loan_type
+            FROM loans l
+            JOIN customers c ON l.customer_id = c.customer_id
+            WHERE l.loan_id = %s
+        """, (loan_id,))
+        loan_data = cur.fetchone()
+        if not loan_data:
+            flash("Loan not found.", "danger")
+            return redirect(url_for('admin.dashboard'))
+            
+        c_user_id, amount, loan_type = loan_data
+
+        # Update loan status
+        cur.execute("UPDATE loans SET status = %s, disbursement_date = CURRENT_DATE WHERE loan_id = %s", (new_status, loan_id))
+        
+        # Audit Log
+        cur.execute("""
+            INSERT INTO audit_log (user_id, action, table_name, record_id, new_value)
+            VALUES (%s, %s, 'loans', %s,
+                    jsonb_build_object('loan_id', %s, 'amount', %s, 'status', %s))
+        """, (session['user_id'], action.upper() + '_LOAN', loan_id, loan_id, amount, new_status))
+        
+        conn.commit()
+
+        # Push to Firebase
+        push_record('loans', loan_id, {
+            'loan_id': str(loan_id),
+            'status': new_status,
+            'disbursement_date': 'now' if action == 'approve' else None
+        })
+
+        flash(f"Loan {loan_id} has been {new_status}.", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error handling loan: {str(e)}", "danger")
+
+    return redirect(url_for('admin.dashboard'))
 
 
 @admin_bp.route('/edit_customer/<int:customer_id>', methods=['GET', 'POST'])

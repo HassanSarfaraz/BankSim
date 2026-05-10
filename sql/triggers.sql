@@ -29,7 +29,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_intercept_large_txn
+DROP TRIGGER IF EXISTS trg_intercept_large_txn ON transactions;
+CREATE TRIGGER aa_intercept_large_txn
 BEFORE INSERT ON transactions
 FOR EACH ROW EXECUTE FUNCTION intercept_large_transaction();
 
@@ -64,7 +65,7 @@ $$ LANGUAGE plpgsql;
 
 -- Use BEFORE trigger for reliable balance_after population
 DROP TRIGGER IF EXISTS trg_balance_management ON transactions;
-CREATE TRIGGER trg_balance_management
+CREATE TRIGGER bb_balance_management
 BEFORE INSERT OR UPDATE ON transactions
 FOR EACH ROW EXECUTE FUNCTION handle_transaction_balance();
 

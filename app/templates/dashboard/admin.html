@@ -214,6 +214,44 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Pending Loan Applications -->
+        <div class="glass card" style="grid-column: span 2;">
+            <h3>Pending Loan Applications</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Customer</th>
+                        <th>Type</th>
+                        <th>Principal</th>
+                        <th>EMI</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for l in pending_loans %}
+                    <tr>
+                        <td><strong>{{ l[1] }}</strong></td>
+                        <td style="text-transform: capitalize;">{{ l[2] }}</td>
+                        <td style="font-weight: 600; color: var(--accent);">${{ "{:,.2f}".format(l[3]) }}</td>
+                        <td style="color: var(--text-muted); font-size: 0.85rem;">${{ "{:,.2f}".format(l[6]) }}/mo</td>
+                        <td>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <form action="{{ url_for('admin.handle_loan', loan_id=l[0], action='approve') }}" method="POST">
+                                    <button type="submit" class="btn btn-primary" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">Approve</button>
+                                </form>
+                                <form action="{{ url_for('admin.handle_loan', loan_id=l[0], action='reject') }}" method="POST">
+                                    <button type="submit" class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; border: 1px solid #ef4444; color: #ef4444;">Reject</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" style="text-align:center; color:var(--text-muted)">No pending loan applications found</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <!-- Active Accounts Overview -->

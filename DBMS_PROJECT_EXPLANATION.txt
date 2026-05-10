@@ -1,0 +1,54 @@
+BANKING SYSTEM (BANKSIM) - DBMS CONCEPT MAPPING
+==============================================
+
+This document explains the Database Management System (DBMS) concepts used in the project and their specific locations in the source code.
+
+1. JOINS (Relational Data Linking)
+----------------------------------
+Used to combine records from two or more tables based on a related column.
+- SQL View: [sql/views.sql:L12] - Joins 'customers', 'accounts', and 'users' to create a unified view.
+- Admin Dashboard: [app/routes/admin.py:L25] - INNER JOINs 'fraud_alerts' with 'accounts' and 'customers' to show identifiable data.
+- Customer Dashboard: [app/routes/customer.py:L27] - JOINs 'customers' and 'accounts' to list all accounts for the logged-in user.
+
+2. SUBQUERIES (Nested Queries)
+------------------------------
+Used to perform a calculation or filter based on the result of another query.
+- Sequence Reset: [app/__init__.py:L58-L64] - Uses (SELECT MAX(id) FROM table) inside setval() to dynamically sync auto-increment sequences.
+- Active Accounts: [sql/views.sql:L19] - Correlates user data with account status in a nested fashion.
+
+3. TRIGGERS (Automated Database Logic)
+--------------------------------------
+Automated actions that fire in response to specific events (INSERT, UPDATE, DELETE).
+- Balance Management: [sql/triggers.sql:L37-L73] - Automatically updates account balances and snapshots whenever a transaction occurs.
+- Fraud Detection: [sql/triggers.sql:L77-L93] - Automatically creates a high-priority alert when a transaction >= $10,000 is detected.
+- Security Lock: [sql/triggers.sql:L4-L19] - Automatically locks a user account after 5 failed login attempts.
+
+4. INDEXES (Performance Optimization)
+-------------------------------------
+Used to speed up data retrieval by creating a lookup structure.
+- Account Lookup: [sql/schema.sql:L53] - Index on customer_id to find accounts quickly.
+- Transaction Speed: [sql/schema.sql:L73] - Composite index on account_id and transaction_date for fast history loading.
+- Ticket Management: [sql/schema.sql:L172-L173] - Indexes on user_id and status for support ticket responsiveness.
+
+5. TRANSACTIONS (ACID Compliance)
+---------------------------------
+Ensures that a series of operations are treated as a single "atomic" unit.
+- Fund Transfer: [sql/functions_and_procedures.sql:L21-L47] - Implements atomic transfers using ROW LOCKING (FOR UPDATE) to prevent double-spending or data loss.
+- Python Commits: [app/routes/customer.py:L114, L186, L219] - Uses conn.commit() to finalize changes and conn.rollback() to handle errors safely.
+- Firebase Batches: [app/backup/sync.py:L112, L297] - Uses WriteBatches to ensure cloud sync is atomic.
+
+6. CURSORS (Record-by-Record Iteration)
+---------------------------------------
+A database object used to retrieve data from a result set one row at a time.
+- SQL Explicit Cursor: [sql/functions_and_procedures.sql:L75-L90] - Uses 'txn_cursor' to iterate through transactions for monthly statements.
+- Python Cursors: [app/routes/customer.py:L22] - Every database interaction in Python starts with 'cur = conn.cursor()'.
+
+7. DATABASE PARTITIONING (Horizontal Scaling)
+---------------------------------------------
+Splitting a large table into smaller, more manageable pieces (partitions).
+- Range Partitioning: [sql/schema.sql:L56-L71] - The 'transactions' table is partitioned by DATE (Range), splitting data into 'transactions_2025' and 'transactions_2026' for high performance.
+
+8. VIEWS (Virtual Tables)
+-------------------------
+A stored query that acts like a virtual table for simplified reporting.
+- Dashboard Views: [sql/views.sql:L4, L33, L54] - Simplifies admin work by pre-joining tables for 'Active Accounts', 'Recent Audit', and 'System Stats'.

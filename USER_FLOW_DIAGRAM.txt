@@ -1,0 +1,111 @@
+BANKING SYSTEM (BANKSIM) - COMPLETE USER & SYSTEM FLOW
+===================================================
+
+1. REGISTRATION & ACCOUNT ACTIVATION FLOW
+-----------------------------------------
+[Start] -> User Action: Open Website
+   |
+[User Action] -> Fill Registration Form
+   |
+[System Decision] -> Does username or email exist?
+   |--- [Choice: Yes] -> Show Error: "Already Exists"
+   |--- [Choice: No]  -> Save to 'account_requests' table (Status: Pending)
+   |
+[User Decision] -> Admin: View 'account_requests'
+   |--- [Choice: Reject] -> Delete Request -> [End]
+   |--- [Choice: Accept] -> 
+           | [System Action] -> Create record in 'users' table
+           | [System Action] -> Create record in 'customers' table
+           | [System Action] -> Generate 'PK99-BANK' account number
+           | [System Action] -> Create record in 'accounts' table (Balance: 0)
+[End]
+
+2. SECURE LOGIN FLOW
+--------------------
+[Start] -> User Action: Enter Credentials
+   |
+[System Decision] -> Is account locked (is_active=false)?
+   |--- [Choice: Yes] -> Show Error: "Account Locked"
+   |--- [Choice: No]  -> Check Password Hash
+   |
+[System Decision] -> Password Match?
+   |--- [Choice: No] -> 
+           | [System Action] -> Log 'login_attempts' (Success: False)
+           | [System Decision] -> 5 Failed attempts in 15 mins?
+                   |--- [Choice: Yes] -> [Trigger] Lock Account -> [End]
+                   |--- [Choice: No]  -> Show Error -> [End]
+   |--- [Choice: Yes] ->
+           | [System Action] -> Update 'previous_login' timestamp
+           | [User Decision] -> Determine Role (Admin vs Customer)
+                   |--- [Choice: Admin]    -> Redirect to /admin/dashboard
+                   |--- [Choice: Customer] -> Redirect to /customer/dashboard
+[End]
+
+3. FUND TRANSFER FLOW (TRANSACTION INTEGRITY)
+---------------------------------------------
+[Start] -> User Action: Enter Transfer Details
+   |
+[User Decision] -> Check Balance?
+   |--- [Choice: Insufficient] -> [System Action] Show Error -> [End]
+   |--- [Choice: Sufficient]   -> [System Action] Call Procedure 'transfer_funds'
+   |
+[System Decision] -> Is amount >= $10,000?
+   |--- [Choice: Yes] ->
+           | [System Action] Set status to 'pending'
+           | [System Action] [Trigger] Create 'fraud_alert' (Severity: High)
+   |--- [Choice: No] ->
+           | [System Action] Execute Atomic Debit/Credit
+           | [System Action] [Trigger] Update 'accounts' balance
+           | [System Action] [Trigger] Record 'balance_after' snapshot
+[End]
+
+4. LOAN APPLICATION & APPROVAL FLOW
+-----------------------------------
+[Start] -> User Action: Select Loan Type (Home, Car, etc.)
+   |
+[User Action] -> Enter Amount and Tenure
+   |
+[System Action] -> [Function] Calculate monthly EMI (principal + interest)
+[System Action] -> Insert into 'loans' table (Status: Pending)
+   |
+[User Decision] -> Admin: Review Loan Request
+   |--- [Choice: Reject] -> Update status to 'rejected'
+   |--- [Choice: Approve] -> 
+           | [System Action] Update status to 'active'
+           | [System Action] Set disbursement_date to today
+           | [System Action] Log to 'audit_log'
+[End]
+
+5. KYC & MEDIA STORAGE FLOW
+---------------------------
+[Start] -> User Action: Upload Identity Document
+   |
+[System Action] -> Save file to 'app/static/uploads'
+[System Action] -> Insert record in 'media_storage' (BYTEA data + Path)
+   |
+[User Decision] -> Admin: Review KYC
+   |--- [Choice: Verify] -> Update 'customers.kyc_status' to 'verified'
+[End]
+
+6. SUPPORT TICKET FLOW
+----------------------
+[Start] -> User Action: Submit Ticket (Subject, Message)
+   |
+[System Action] -> Insert into 'support_tickets' (Status: Pending)
+   |
+[User Decision] -> Admin: Review Open Tickets (Cursor Iteration)
+   |
+[User Action] -> Admin: Type 'admin_reply' and click Resolve
+   |
+[System Action] -> Update Status to 'Resolved'
+[System Action] -> Sync data to Firebase Firestore
+[End]
+
+7. ADMIN DASHBOARD FLOW (VIEWS & CONSOLIDATION)
+-----------------------------------------------
+[Start] -> System Action: Load 'active_accounts_view'
+   |
+[User Action] -> Admin: View consolidated stats
+   |--- [Action: Toggle Lock] -> [System Action] Update 'users.is_active'
+   |--- [Action: Backup] -> [System Action] Sync PostgreSQL to Cloud
+[End]
